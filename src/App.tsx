@@ -5,9 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import { AuthProvider } from "./hooks/useAuth";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+
+// Auth Pages
+import StudentAuth from "./pages/auth/StudentAuth";
+import TeacherAuth from "./pages/auth/TeacherAuth";
 
 // Student Pages
-import StudentLogin from "./pages/student/StudentLogin";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import TestDetails from "./pages/student/TestDetails";
 import TestInstructions from "./pages/student/TestInstructions";
@@ -17,9 +22,8 @@ import TestResult from "./pages/student/TestResult";
 import AcademicHistory from "./pages/student/AcademicHistory";
 
 // Teacher Pages
-import TeacherLogin from "./pages/teacher/TeacherLogin";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
-import CreateTest from "./pages/teacher/CreateTest";
+import TestCreationWizard from "./pages/teacher/TestCreationWizard";
 import QuestionBuilder from "./pages/teacher/QuestionBuilder";
 import SubmissionsList from "./pages/teacher/SubmissionsList";
 import SubmissionReview from "./pages/teacher/SubmissionReview";
@@ -33,31 +37,87 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          
-          {/* Student Routes */}
-          <Route path="/student/login" element={<StudentLogin />} />
-          <Route path="/student/dashboard" element={<StudentDashboard />} />
-          <Route path="/student/test/:testId/details" element={<TestDetails />} />
-          <Route path="/student/test/:testId/instructions" element={<TestInstructions />} />
-          <Route path="/student/test/:testId/take" element={<TestInterface />} />
-          <Route path="/student/test/:testId/submitted" element={<SubmissionConfirmation />} />
-          <Route path="/student/test/:testId/result" element={<TestResult />} />
-          <Route path="/student/history" element={<AcademicHistory />} />
-          
-          {/* Teacher Routes */}
-          <Route path="/teacher/login" element={<TeacherLogin />} />
-          <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-          <Route path="/teacher/subjects" element={<ManageSubjects />} />
-          <Route path="/teacher/create-test" element={<CreateTest />} />
-          <Route path="/teacher/question-builder" element={<QuestionBuilder />} />
-          <Route path="/teacher/submissions" element={<SubmissionsList />} />
-          <Route path="/teacher/submission/:submissionId" element={<SubmissionReview />} />
-          
-          {/* Catch-all */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            
+            {/* Auth Routes */}
+            <Route path="/student/auth" element={<StudentAuth />} />
+            <Route path="/teacher/auth" element={<TeacherAuth />} />
+            
+            {/* Student Routes */}
+            <Route path="/student/dashboard" element={
+              <ProtectedRoute allowedRole="student">
+                <StudentDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/test/:testId/details" element={
+              <ProtectedRoute allowedRole="student">
+                <TestDetails />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/test/:testId/instructions" element={
+              <ProtectedRoute allowedRole="student">
+                <TestInstructions />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/test/:testId/take" element={
+              <ProtectedRoute allowedRole="student">
+                <TestInterface />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/test/:testId/submitted" element={
+              <ProtectedRoute allowedRole="student">
+                <SubmissionConfirmation />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/test/:testId/result" element={
+              <ProtectedRoute allowedRole="student">
+                <TestResult />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/history" element={
+              <ProtectedRoute allowedRole="student">
+                <AcademicHistory />
+              </ProtectedRoute>
+            } />
+            
+            {/* Teacher Routes */}
+            <Route path="/teacher/dashboard" element={
+              <ProtectedRoute allowedRole="teacher">
+                <TeacherDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/teacher/subjects" element={
+              <ProtectedRoute allowedRole="teacher">
+                <ManageSubjects />
+              </ProtectedRoute>
+            } />
+            <Route path="/teacher/create-test" element={
+              <ProtectedRoute allowedRole="teacher">
+                <TestCreationWizard />
+              </ProtectedRoute>
+            } />
+            <Route path="/teacher/question-builder" element={
+              <ProtectedRoute allowedRole="teacher">
+                <QuestionBuilder />
+              </ProtectedRoute>
+            } />
+            <Route path="/teacher/submissions" element={
+              <ProtectedRoute allowedRole="teacher">
+                <SubmissionsList />
+              </ProtectedRoute>
+            } />
+            <Route path="/teacher/submission/:submissionId" element={
+              <ProtectedRoute allowedRole="teacher">
+                <SubmissionReview />
+              </ProtectedRoute>
+            } />
+            
+            {/* Catch-all */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

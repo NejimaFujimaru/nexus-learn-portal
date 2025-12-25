@@ -52,7 +52,7 @@ const Index = () => {
               <Button 
                 size="lg" 
                 className="min-w-[200px] h-14 text-lg font-semibold group"
-                onClick={() => navigate('/student/login')}
+                onClick={() => navigate('/student/auth')}
               >
                 Student Portal
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -61,7 +61,7 @@ const Index = () => {
                 size="lg" 
                 variant="outline"
                 className="min-w-[200px] h-14 text-lg font-semibold group"
-                onClick={() => navigate('/teacher/login')}
+                onClick={() => navigate('/teacher/auth')}
               >
                 Teacher Portal
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
