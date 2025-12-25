@@ -1,7 +1,7 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
-import { mockSubmissions } from '@/data/mockData';
-import { ArrowLeft, Clock, CheckCircle2, Eye, Brain } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle2, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,13 +14,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { dbOperations, Submission } from '@/lib/firebase';
 
 const SubmissionsList = () => {
   const navigate = useNavigate();
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = dbOperations.subscribeToSubmissions(setSubmissions);
+    return unsubscribe;
+  }, []);
   
-  const pendingSubmissions = mockSubmissions.filter(s => s.status === 'pending');
-  const reviewedSubmissions = mockSubmissions.filter(s => s.status === 'reviewed');
-  const approvedSubmissions = mockSubmissions.filter(s => s.status === 'approved');
+  const pendingSubmissions = submissions.filter(s => s.status === 'pending');
+  const gradedSubmissions = submissions.filter(s => s.status === 'graded');
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -35,51 +41,32 @@ const SubmissionsList = () => {
     switch (status) {
       case 'pending':
         return <Badge className="bg-chart-3/20 text-chart-3">Pending Review</Badge>;
-      case 'reviewed':
-        return <Badge className="bg-chart-4/20 text-chart-4">Reviewed</Badge>;
-      case 'approved':
-        return <Badge className="bg-chart-1/20 text-chart-1">Approved</Badge>;
+      case 'graded':
+        return <Badge className="bg-chart-1/20 text-chart-1">Graded</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const SubmissionTable = ({ submissions }: { submissions: typeof mockSubmissions }) => (
+  const SubmissionTable = ({ data }: { data: Submission[] }) => (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Student Name</TableHead>
-            <TableHead>Test</TableHead>
             <TableHead>Submitted</TableHead>
-            <TableHead>AI Score</TableHead>
-            <TableHead>Confidence</TableHead>
+            <TableHead>Auto Score</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {submissions.map((submission) => (
+          {data.map((submission) => (
             <TableRow key={submission.id}>
               <TableCell className="font-medium">{submission.studentName}</TableCell>
-              <TableCell>{submission.testName}</TableCell>
               <TableCell>{formatDate(submission.submittedAt)}</TableCell>
               <TableCell>
-                <div className="flex items-center gap-1">
-                  <Brain className="h-4 w-4 text-primary" />
-                  <span className="font-semibold">{submission.aiScore}%</span>
-                </div>
-              </TableCell>
-              <TableCell>
-                <Badge 
-                  variant="outline" 
-                  className={submission.aiConfidence && submission.aiConfidence >= 85 
-                    ? 'border-chart-1 text-chart-1' 
-                    : 'border-chart-5 text-chart-5'
-                  }
-                >
-                  {submission.aiConfidence}%
-                </Badge>
+                <span className="font-semibold">{submission.totalAutoScore}</span>
               </TableCell>
               <TableCell>{getStatusBadge(submission.status)}</TableCell>
               <TableCell className="text-right">
@@ -118,7 +105,7 @@ const SubmissionsList = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           <Card className="bg-card">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -135,25 +122,12 @@ const SubmissionsList = () => {
           <Card className="bg-card">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-chart-4/20">
-                  <Eye className="h-5 w-5 text-chart-4" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-card-foreground">{reviewedSubmissions.length}</p>
-                  <p className="text-sm text-muted-foreground">Reviewed</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-chart-1/20">
                   <CheckCircle2 className="h-5 w-5 text-chart-1" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-card-foreground">{approvedSubmissions.length}</p>
-                  <p className="text-sm text-muted-foreground">Approved</p>
+                  <p className="text-2xl font-bold text-card-foreground">{gradedSubmissions.length}</p>
+                  <p className="text-sm text-muted-foreground">Graded</p>
                 </div>
               </div>
             </CardContent>
@@ -172,20 +146,17 @@ const SubmissionsList = () => {
                 <TabsTrigger value="pending">
                   Pending ({pendingSubmissions.length})
                 </TabsTrigger>
-                <TabsTrigger value="reviewed">
-                  Reviewed ({reviewedSubmissions.length})
-                </TabsTrigger>
-                <TabsTrigger value="approved">
-                  Approved ({approvedSubmissions.length})
+                <TabsTrigger value="graded">
+                  Graded ({gradedSubmissions.length})
                 </TabsTrigger>
                 <TabsTrigger value="all">
-                  All ({mockSubmissions.length})
+                  All ({submissions.length})
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="pending">
                 {pendingSubmissions.length > 0 ? (
-                  <SubmissionTable submissions={pendingSubmissions} />
+                  <SubmissionTable data={pendingSubmissions} />
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
                     No pending submissions
@@ -193,28 +164,24 @@ const SubmissionsList = () => {
                 )}
               </TabsContent>
 
-              <TabsContent value="reviewed">
-                {reviewedSubmissions.length > 0 ? (
-                  <SubmissionTable submissions={reviewedSubmissions} />
+              <TabsContent value="graded">
+                {gradedSubmissions.length > 0 ? (
+                  <SubmissionTable data={gradedSubmissions} />
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
-                    No reviewed submissions
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="approved">
-                {approvedSubmissions.length > 0 ? (
-                  <SubmissionTable submissions={approvedSubmissions} />
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    No approved submissions
+                    No graded submissions
                   </div>
                 )}
               </TabsContent>
 
               <TabsContent value="all">
-                <SubmissionTable submissions={mockSubmissions} />
+                {submissions.length > 0 ? (
+                  <SubmissionTable data={submissions} />
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    No submissions yet
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </CardContent>

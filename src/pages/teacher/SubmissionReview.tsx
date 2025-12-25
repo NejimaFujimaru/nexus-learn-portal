@@ -1,25 +1,56 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
-import { mockSubmissions, mockQuestions, mockStudentAnswers } from '@/data/mockData';
-import { ArrowLeft, Brain, CheckCircle2, XCircle, AlertCircle, ThumbsUp, Edit3 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, ThumbsUp, Edit3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { dbOperations, Submission, Question } from '@/lib/firebase';
 
 const SubmissionReview = () => {
   const { submissionId } = useParams();
   const navigate = useNavigate();
-  const submission = mockSubmissions.find((s) => s.id === submissionId);
-  
+  const [submission, setSubmission] = useState<Submission | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [teacherRemarks, setTeacherRemarks] = useState('');
-  const [adjustedScore, setAdjustedScore] = useState(submission?.aiScore?.toString() || '');
+  const [shortAnswerMarks, setShortAnswerMarks] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadSubmission = async () => {
+      try {
+        const submissions = await dbOperations.getSubmissions();
+        const found = submissions.find(s => s.id === submissionId);
+        if (found) {
+          setSubmission(found);
+          setTeacherRemarks(found.teacherRemarks || '');
+          setShortAnswerMarks(found.shortAnswerMarks?.toString() || '0');
+          const testQuestions = await dbOperations.getQuestionsByTest(found.testId);
+          setQuestions(testQuestions);
+        }
+      } catch (error) {
+        console.error('Error loading submission:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSubmission();
+  }, [submissionId]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header userType="teacher" userName="Dr. Sarah Mitchell" />
+        <main className="max-w-4xl mx-auto px-4 py-8">
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        </main>
+      </div>
+    );
+  }
 
   if (!submission) {
     return (
@@ -40,27 +71,28 @@ const SubmissionReview = () => {
     );
   }
 
-  const handleApprove = () => {
-    toast({
-      title: "Submission Approved (Demo)",
-      description: "The result has been approved and sent to the student.",
-    });
-    navigate('/teacher/submissions');
+  const handleApprove = async () => {
+    try {
+      await dbOperations.updateSubmission(submission.id, {
+        status: 'graded',
+        teacherRemarks,
+        shortAnswerMarks: parseInt(shortAnswerMarks) || 0
+      });
+      toast({ title: "Submission graded successfully" });
+      navigate('/teacher/submissions');
+    } catch (error) {
+      toast({ title: "Error updating submission", variant: "destructive" });
+    }
   };
 
-  const handleRequestRevision = () => {
-    toast({
-      title: "Revision Requested (Demo)",
-      description: "AI will re-evaluate the submission with your feedback.",
-    });
+  const getAnswerForQuestion = (questionId: string) => {
+    const answer = submission.answers.find(a => a.questionId === questionId);
+    return answer?.answer;
   };
 
-  const handleOverrideScore = () => {
-    toast({
-      title: "Score Updated (Demo)",
-      description: `Score updated to ${adjustedScore}%.`,
-    });
-  };
+  const mcqQuestions = questions.filter(q => q.type === 'mcq');
+  const fillBlankQuestions = questions.filter(q => q.type === 'fillBlank');
+  const shortAnswerQuestions = questions.filter(q => q.type === 'shortAnswer');
 
   return (
     <div className="min-h-screen bg-background">
@@ -81,27 +113,16 @@ const SubmissionReview = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <CardTitle className="text-2xl">{submission.studentName}</CardTitle>
-                <CardDescription>{submission.testName}</CardDescription>
+                <CardDescription>Submitted: {new Date(submission.submittedAt).toLocaleString()}</CardDescription>
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-center">
-                  <div className="flex items-center gap-2">
-                    <Brain className="h-5 w-5 text-primary" />
-                    <span className="text-3xl font-bold text-primary">{submission.aiScore}%</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">AI Score</p>
+                  <span className="text-3xl font-bold text-primary">{submission.totalAutoScore}</span>
+                  <p className="text-xs text-muted-foreground">Auto Score</p>
                 </div>
-                <div className="text-center">
-                  <Badge 
-                    variant="outline" 
-                    className={submission.aiConfidence && submission.aiConfidence >= 85 
-                      ? 'border-chart-1 text-chart-1' 
-                      : 'border-chart-5 text-chart-5'
-                    }
-                  >
-                    {submission.aiConfidence}% confident
-                  </Badge>
-                </div>
+                <Badge className={submission.status === 'graded' ? 'bg-chart-1/20 text-chart-1' : 'bg-chart-3/20 text-chart-3'}>
+                  {submission.status === 'graded' ? 'Graded' : 'Pending'}
+                </Badge>
               </div>
             </div>
           </CardHeader>
@@ -111,134 +132,135 @@ const SubmissionReview = () => {
           {/* Student Answers */}
           <div className="lg:col-span-2 space-y-6">
             {/* MCQ Section */}
-            <Card className="bg-card">
-              <CardHeader>
-                <CardTitle className="text-lg">Multiple Choice Questions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {mockQuestions.mcq.map((q, index) => {
-                  const studentAnswer = mockStudentAnswers.mcq.find(a => a.questionId === q.id);
-                  const isCorrect = studentAnswer?.selectedOption === q.correctAnswer;
-                  
-                  return (
-                    <div key={q.id} className="p-4 bg-accent rounded-lg">
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="font-medium text-foreground">Q{index + 1}. {q.question}</p>
-                        {isCorrect ? (
-                          <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
-                        ) : (
-                          <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-                        )}
+            {mcqQuestions.length > 0 && (
+              <Card className="bg-card">
+                <CardHeader>
+                  <CardTitle className="text-lg">Multiple Choice Questions</CardTitle>
+                  <CardDescription>MCQ Score: {submission.mcqScore}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {mcqQuestions.map((q, index) => {
+                    const studentAnswer = getAnswerForQuestion(q.id);
+                    const isCorrect = studentAnswer === q.correctAnswer;
+                    
+                    return (
+                      <div key={q.id} className="p-4 bg-accent rounded-lg">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="font-medium text-foreground">Q{index + 1}. {q.text}</p>
+                          {isCorrect ? (
+                            <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+                          )}
+                        </div>
+                        <div className="space-y-1 text-sm">
+                          {q.options?.map((option, optIndex) => (
+                            <div 
+                              key={optIndex}
+                              className={`p-2 rounded ${
+                                optIndex === q.correctAnswer 
+                                  ? 'bg-chart-1/20 text-chart-1' 
+                                  : optIndex === studentAnswer && !isCorrect
+                                  ? 'bg-destructive/20 text-destructive'
+                                  : 'text-muted-foreground'
+                              }`}
+                            >
+                              {option}
+                              {optIndex === q.correctAnswer && ' ✓'}
+                              {optIndex === studentAnswer && optIndex !== q.correctAnswer && ' (Student)'}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="space-y-1 text-sm">
-                        {q.options.map((option, optIndex) => (
-                          <div 
-                            key={optIndex}
-                            className={`p-2 rounded ${
-                              optIndex === q.correctAnswer 
-                                ? 'bg-chart-1/20 text-chart-1' 
-                                : optIndex === studentAnswer?.selectedOption && !isCorrect
-                                ? 'bg-destructive/20 text-destructive'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {option}
-                            {optIndex === q.correctAnswer && ' ✓'}
-                            {optIndex === studentAnswer?.selectedOption && optIndex !== q.correctAnswer && ' (Student answer)'}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Fill in the Blanks */}
-            <Card className="bg-card">
-              <CardHeader>
-                <CardTitle className="text-lg">Fill in the Blanks</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {mockQuestions.fillBlanks.map((q, index) => {
-                  const studentAnswer = mockStudentAnswers.fillBlanks.find(a => a.questionId === q.id);
-                  const isCorrect = studentAnswer?.answer.toLowerCase() === q.answer.toLowerCase();
-                  
-                  return (
-                    <div key={q.id} className="p-4 bg-accent rounded-lg">
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="font-medium text-foreground">Q{index + 1}. {q.question}</p>
-                        {isCorrect ? (
-                          <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
-                        ) : (
-                          <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-                        )}
+            {fillBlankQuestions.length > 0 && (
+              <Card className="bg-card">
+                <CardHeader>
+                  <CardTitle className="text-lg">Fill in the Blanks</CardTitle>
+                  <CardDescription>Fill Blank Score: {submission.fillBlankScore}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {fillBlankQuestions.map((q, index) => {
+                    const studentAnswer = getAnswerForQuestion(q.id);
+                    const isCorrect = typeof studentAnswer === 'string' && 
+                      studentAnswer.toLowerCase().trim() === (q.correctAnswer as string).toLowerCase().trim();
+                    
+                    return (
+                      <div key={q.id} className="p-4 bg-accent rounded-lg">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="font-medium text-foreground">Q{index + 1}. {q.text}</p>
+                          {isCorrect ? (
+                            <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+                          )}
+                        </div>
+                        <div className="text-sm space-y-1">
+                          <p><span className="text-muted-foreground">Student:</span> <span className={isCorrect ? 'text-chart-1' : 'text-destructive'}>{studentAnswer}</span></p>
+                          <p><span className="text-muted-foreground">Correct:</span> <span className="text-chart-1">{q.correctAnswer}</span></p>
+                        </div>
                       </div>
-                      <div className="text-sm space-y-1">
-                        <p><span className="text-muted-foreground">Student Answer:</span> <span className={isCorrect ? 'text-chart-1' : 'text-destructive'}>{studentAnswer?.answer}</span></p>
-                        <p><span className="text-muted-foreground">Correct Answer:</span> <span className="text-chart-1">{q.answer}</span></p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Short Answers */}
-            <Card className="bg-card">
-              <CardHeader>
-                <CardTitle className="text-lg">Short Answer Questions</CardTitle>
-                <CardDescription>AI-evaluated responses - review for accuracy</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {mockQuestions.shortAnswer.map((q, index) => {
-                  const studentAnswer = mockStudentAnswers.shortAnswer.find(a => a.questionId === q.id);
-                  
-                  return (
-                    <div key={q.id} className="p-4 bg-accent rounded-lg">
-                      <p className="font-medium text-foreground mb-2">Q{index + 1}. {q.question}</p>
-                      <div className="bg-card p-3 rounded border border-border">
-                        <p className="text-sm text-foreground">{studentAnswer?.answer}</p>
+            {shortAnswerQuestions.length > 0 && (
+              <Card className="bg-card">
+                <CardHeader>
+                  <CardTitle className="text-lg">Short Answer Questions</CardTitle>
+                  <CardDescription>Review and assign marks for these answers</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {shortAnswerQuestions.map((q, index) => {
+                    const studentAnswer = getAnswerForQuestion(q.id);
+                    
+                    return (
+                      <div key={q.id} className="p-4 bg-accent rounded-lg">
+                        <p className="font-medium text-foreground mb-2">Q{index + 1}. {q.text}</p>
+                        <div className="bg-card p-3 rounded border border-border">
+                          <p className="text-sm text-foreground">{studentAnswer || 'No answer provided'}</p>
+                        </div>
                       </div>
-                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                        <Brain className="h-3 w-3" />
-                        AI Assessment: Good understanding demonstrated
-                      </div>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Score Override */}
-            <Card className="bg-card">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Edit3 className="h-5 w-5" />
-                  Score Override
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Adjusted Score (%)</Label>
-                  <div className="flex gap-2">
+            {/* Short Answer Marks */}
+            {shortAnswerQuestions.length > 0 && (
+              <Card className="bg-card">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Edit3 className="h-5 w-5" />
+                    Short Answer Marks
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Marks for Short Answers</Label>
                     <Input 
                       type="number" 
-                      value={adjustedScore}
-                      onChange={(e) => setAdjustedScore(e.target.value)}
+                      value={shortAnswerMarks}
+                      onChange={(e) => setShortAnswerMarks(e.target.value)}
                       min={0}
-                      max={100}
                     />
-                    <Button variant="outline" onClick={handleOverrideScore}>
-                      Update
-                    </Button>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Teacher Remarks */}
             <Card className="bg-card">
@@ -263,11 +285,7 @@ const SubmissionReview = () => {
               <CardContent className="space-y-3">
                 <Button className="w-full" onClick={handleApprove}>
                   <ThumbsUp className="h-4 w-4 mr-2" />
-                  Approve Result
-                </Button>
-                <Button variant="outline" className="w-full" onClick={handleRequestRevision}>
-                  <Brain className="h-4 w-4 mr-2" />
-                  Request AI Re-evaluation
+                  {submission.status === 'graded' ? 'Update Grade' : 'Approve & Grade'}
                 </Button>
               </CardContent>
             </Card>
