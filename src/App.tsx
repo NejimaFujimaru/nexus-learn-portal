@@ -23,6 +23,7 @@ import CreateTest from "./pages/teacher/CreateTest";
 import QuestionBuilder from "./pages/teacher/QuestionBuilder";
 import SubmissionsList from "./pages/teacher/SubmissionsList";
 import SubmissionReview from "./pages/teacher/SubmissionReview";
+import ManageSubjects from "./pages/teacher/ManageSubjects";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
           {/* Teacher Routes */}
           <Route path="/teacher/login" element={<TeacherLogin />} />
           <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+          <Route path="/teacher/subjects" element={<ManageSubjects />} />
           <Route path="/teacher/create-test" element={<CreateTest />} />
           <Route path="/teacher/question-builder" element={<QuestionBuilder />} />
           <Route path="/teacher/submissions" element={<SubmissionsList />} />
