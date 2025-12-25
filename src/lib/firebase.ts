@@ -7,9 +7,9 @@ import {
   signOut, 
   onAuthStateChanged,
   updateProfile,
-  sendPasswordResetEmail,
-  User
+  sendPasswordResetEmail
 } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import { getDatabase, ref, set, get, push, remove, update, onValue } from 'firebase/database';
 
 const firebaseConfig = {
