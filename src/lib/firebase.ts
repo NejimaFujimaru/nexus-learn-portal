@@ -1,7 +1,15 @@
 // Firebase Configuration for Nexus Learn
-// Replace these values with your Firebase project credentials
-
 import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  updateProfile,
+  sendPasswordResetEmail,
+  User
+} from 'firebase/auth';
 import { getDatabase, ref, set, get, push, remove, update, onValue } from 'firebase/database';
 
 const firebaseConfig = {
@@ -15,7 +23,84 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
 export const database = getDatabase(app);
+
+// Auth functions
+export const registerUser = async (email: string, password: string, displayName: string, phone: string, role: 'teacher' | 'student') => {
+  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  await updateProfile(userCredential.user, { displayName });
+  await set(ref(database, `users/${userCredential.user.uid}`), { email, displayName, phone, role, createdAt: Date.now() });
+  return userCredential.user;
+};
+
+export const loginUser = async (email: string, password: string) => {
+  const userCredential = await signInWithEmailAndPassword(auth, email, password);
+  return userCredential.user;
+};
+
+export const logoutUser = async () => { await signOut(auth); };
+
+export const resetPassword = async (email: string) => { await sendPasswordResetEmail(auth, email); };
+
+export const getUserRole = async (uid: string): Promise<'teacher' | 'student' | null> => {
+  const snapshot = await get(ref(database, `users/${uid}/role`));
+  return snapshot.val();
+};
+
+// Standalone database functions for new components
+export const getSubjects = async () => {
+  const snapshot = await get(ref(database, 'subjects'));
+  return snapshot.exists() ? Object.values(snapshot.val()) : [];
+};
+
+export const saveSubject = async (subjectData: { name: string; chapters: any[] }) => {
+  const newRef = push(ref(database, 'subjects'));
+  await set(newRef, { ...subjectData, id: newRef.key });
+  return newRef.key;
+};
+
+export const updateSubject = async (subjectId: string, subjectData: any) => {
+  await update(ref(database, `subjects/${subjectId}`), subjectData);
+};
+
+export const deleteSubject = async (subjectId: string) => {
+  await remove(ref(database, `subjects/${subjectId}`));
+};
+
+export const saveTest = async (testData: any) => {
+  const newRef = push(ref(database, 'tests'));
+  await set(newRef, { ...testData, id: newRef.key, createdAt: Date.now(), published: true });
+  return newRef.key;
+};
+
+export const getTests = async () => {
+  const snapshot = await get(ref(database, 'tests'));
+  return snapshot.exists() ? Object.values(snapshot.val()) : [];
+};
+
+export const getTestById = async (testId: string) => {
+  const snapshot = await get(ref(database, `tests/${testId}`));
+  return snapshot.val();
+};
+
+export const saveSubmission = async (submissionData: any) => {
+  const newRef = push(ref(database, 'submissions'));
+  await set(newRef, { ...submissionData, id: newRef.key, submittedAt: Date.now() });
+  return newRef.key;
+};
+
+export const getSubmissions = async () => {
+  const snapshot = await get(ref(database, 'submissions'));
+  return snapshot.exists() ? Object.values(snapshot.val()) : [];
+};
+
+export const updateSubmission = async (submissionId: string, data: any) => {
+  await update(ref(database, `submissions/${submissionId}`), data);
+};
+
+export { onAuthStateChanged };
+export type { User };
 
 // Database Types
 export interface Subject {
