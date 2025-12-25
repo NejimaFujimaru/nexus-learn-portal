@@ -4,15 +4,14 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, push, remove, update, onValue } from 'firebase/database';
 
-// TODO: Replace with your Firebase config from console.firebase.google.com
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDuYyUDMAaWAEhIfl56zbOltkd9QE9TExA",
+  authDomain: "nexuslearn-66afd.firebaseapp.com",
+  databaseURL: "https://nexuslearn-66afd-default-rtdb.firebaseio.com",
+  projectId: "nexuslearn-66afd",
+  storageBucket: "nexuslearn-66afd.firebasestorage.app",
+  messagingSenderId: "814853787242",
+  appId: "1:814853787242:web:741a9358080809100a0413"
 };
 
 const app = initializeApp(firebaseConfig);
