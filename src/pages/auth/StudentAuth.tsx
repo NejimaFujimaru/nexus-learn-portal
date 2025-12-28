@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Eye, EyeOff, Mail, Lock, User, Phone, GraduationCap, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, GraduationCap, Loader2, X, ArrowLeft } from 'lucide-react';
 import { registerUser, loginUser, resetPassword } from '@/lib/firebase';
 
 const StudentAuth = () => {
@@ -133,8 +133,26 @@ const StudentAuth = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-secondary/5 via-background to-primary/5 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="text-center space-y-2">
+      <Card className="w-full max-w-md shadow-lg relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute right-2 top-2 z-10"
+          onClick={() => navigate('/')}
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute left-2 top-2 z-10"
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <CardHeader className="text-center space-y-2 pt-10">
           <div className="mx-auto w-12 h-12 bg-secondary/10 rounded-full flex items-center justify-center">
             <GraduationCap className="w-6 h-6 text-secondary-foreground" />
           </div>
