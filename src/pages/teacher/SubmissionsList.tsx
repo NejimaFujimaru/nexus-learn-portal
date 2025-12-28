@@ -15,9 +15,12 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { dbOperations, Submission } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
 
 const SubmissionsList = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Teacher';
   const [submissions, setSubmissions] = useState<Submission[]>([]);
 
   useEffect(() => {
@@ -88,7 +91,7 @@ const SubmissionsList = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header userType="teacher" userName="Dr. Sarah Mitchell" />
+      <Header userType="teacher" userName={userName} />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link 

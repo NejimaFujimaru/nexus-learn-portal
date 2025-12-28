@@ -10,10 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { dbOperations, Submission, Question } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
 
 const SubmissionReview = () => {
   const { submissionId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Teacher';
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [teacherRemarks, setTeacherRemarks] = useState('');
@@ -44,7 +47,7 @@ const SubmissionReview = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <Header userType="teacher" userName="Dr. Sarah Mitchell" />
+        <Header userType="teacher" userName={userName} />
         <main className="max-w-4xl mx-auto px-4 py-8">
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         </main>
@@ -55,7 +58,7 @@ const SubmissionReview = () => {
   if (!submission) {
     return (
       <div className="min-h-screen bg-background">
-        <Header userType="teacher" userName="Dr. Sarah Mitchell" />
+        <Header userType="teacher" userName={userName} />
         <main className="max-w-4xl mx-auto px-4 py-8">
           <Card className="bg-card">
             <CardContent className="flex flex-col items-center justify-center py-12">
@@ -96,7 +99,7 @@ const SubmissionReview = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header userType="teacher" userName="Dr. Sarah Mitchell" />
+      <Header userType="teacher" userName={userName} />
       
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link 
