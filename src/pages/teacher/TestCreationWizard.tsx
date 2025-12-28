@@ -98,7 +98,9 @@ const TestCreationWizard = () => {
       toast({ title: 'Error', description: 'Please select a subject', variant: 'destructive' });
       return false;
     }
-    if (selectedChapters.length === 0) {
+    // Only validate chapters if the selected subject has chapters
+    const subjectHasChapters = selectedSubjectData?.chapters && selectedSubjectData.chapters.length > 0;
+    if (subjectHasChapters && selectedChapters.length === 0) {
       toast({ title: 'Error', description: 'Please select at least one chapter', variant: 'destructive' });
       return false;
     }
@@ -314,23 +316,29 @@ const TestCreationWizard = () => {
                 </div>
               </div>
 
-              {selectedSubjectData && selectedSubjectData.chapters?.length > 0 && (
+              {selectedSubjectData && (
                 <div className="space-y-2">
-                  <Label>Chapters *</Label>
-                  <div className="border rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
-                    {selectedSubjectData.chapters.map(chapter => (
-                      <div key={chapter.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={chapter.id}
-                          checked={selectedChapters.includes(chapter.id)}
-                          onCheckedChange={() => handleChapterToggle(chapter.id)}
-                        />
-                        <Label htmlFor={chapter.id} className="cursor-pointer">
-                          {chapter.title}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
+                  <Label>Chapters {selectedSubjectData.chapters?.length > 0 ? '*' : '(Optional)'}</Label>
+                  {selectedSubjectData.chapters?.length > 0 ? (
+                    <div className="border rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
+                      {selectedSubjectData.chapters.map(chapter => (
+                        <div key={chapter.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={chapter.id}
+                            checked={selectedChapters.includes(chapter.id)}
+                            onCheckedChange={() => handleChapterToggle(chapter.id)}
+                          />
+                          <Label htmlFor={chapter.id} className="cursor-pointer">
+                            {chapter.title}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg p-4 text-muted-foreground text-sm">
+                      No chapters available for this subject. You can create the test without chapters.
+                    </div>
+                  )}
                 </div>
               )}
 

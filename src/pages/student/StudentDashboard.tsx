@@ -4,12 +4,16 @@ import { BookOpen, CheckCircle, Clock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TestCard } from '@/components/TestCard';
-import { dbOperations, Test, Submission } from '@/lib/firebase';
+import { dbOperations, Test, Submission, auth } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
 
 const StudentDashboard = () => {
+  const { user } = useAuth();
   const [tests, setTests] = useState<Test[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const studentId = 'demo-student';
+  const studentId = user?.uid || 'demo-student';
+  
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Student';
 
   useEffect(() => {
     const unsubTests = dbOperations.subscribeToTests((data) => {
@@ -33,10 +37,10 @@ const StudentDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header userType="student" userName="Alex Thompson" />
+      <Header userType="student" userName={userName} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, Alex!</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, {userName}!</h1>
           <p className="text-muted-foreground">Here's an overview of your learning progress.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
