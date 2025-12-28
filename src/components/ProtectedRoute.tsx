@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  allowedRole: 'teacher' | 'student';
+  allowedRole?: 'teacher' | 'student';
 }
 
 export const ProtectedRoute = ({ children, allowedRole }: ProtectedRouteProps) => {
@@ -20,10 +20,12 @@ export const ProtectedRoute = ({ children, allowedRole }: ProtectedRouteProps) =
   }
 
   if (!user) {
-    return <Navigate to={`/${allowedRole}/auth`} replace />;
+    // Redirect to appropriate auth page based on intended role or default to student
+    return <Navigate to={`/${allowedRole || 'student'}/auth`} replace />;
   }
 
-  if (role !== allowedRole) {
+  // If a specific role is required, check it
+  if (allowedRole && role !== allowedRole) {
     return <Navigate to={`/${role}/dashboard`} replace />;
   }
 

@@ -1,7 +1,15 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { LogOut, Menu, X, GraduationCap } from 'lucide-react';
+import { LogOut, Menu, X, GraduationCap, Settings, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface HeaderProps {
   userType: 'student' | 'teacher';
@@ -52,13 +60,32 @@ export const Header = ({ userType, userName = 'User' }: HeaderProps) => {
           </nav>
 
           <div className="hidden md:flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              Welcome, <span className="font-semibold text-foreground">{userName}</span>
-            </span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center gap-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                      {userName.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium">{userName}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-popover">
+                <DropdownMenuItem asChild>
+                  <Link to="/settings" className="flex items-center cursor-pointer">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Mobile Menu Button */}
@@ -88,6 +115,14 @@ export const Header = ({ userType, userName = 'User' }: HeaderProps) => {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                to="/settings"
+                className="text-muted-foreground hover:text-primary transition-colors font-medium py-2 flex items-center gap-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
               <Button variant="outline" size="sm" onClick={handleLogout} className="mt-2 w-fit">
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout

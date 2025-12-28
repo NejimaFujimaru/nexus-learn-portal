@@ -29,6 +29,9 @@ import SubmissionsList from "./pages/teacher/SubmissionsList";
 import SubmissionReview from "./pages/teacher/SubmissionReview";
 import ManageSubjects from "./pages/teacher/ManageSubjects";
 
+// Shared Pages
+import Settings from "./pages/Settings";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -79,6 +82,13 @@ const App = () => (
             <Route path="/student/history" element={
               <ProtectedRoute allowedRole="student">
                 <AcademicHistory />
+              </ProtectedRoute>
+            } />
+            
+            {/* Settings Route - accessible by both roles */}
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Settings />
               </ProtectedRoute>
             } />
             
