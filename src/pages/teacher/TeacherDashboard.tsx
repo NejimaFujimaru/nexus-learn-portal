@@ -6,9 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { dbOperations, Subject, Test, Submission } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Teacher';
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tests, setTests] = useState<Test[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -34,11 +38,11 @@ const TeacherDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header userType="teacher" userName="Dr. Sarah Mitchell" />
+      <Header userType="teacher" userName={userName} />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, Dr. Mitchell!</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, {userName}!</h1>
           <p className="text-muted-foreground">Manage your classes and review student submissions.</p>
         </div>
 
