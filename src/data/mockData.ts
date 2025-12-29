@@ -46,83 +46,9 @@ export interface Submission {
   aiConfidence?: number;
 }
 
-export const mockTests: Test[] = [
-  {
-    id: '1',
-    name: 'Mathematics Unit Test 1',
-    type: 'Quiz',
-    subject: 'Mathematics',
-    chapters: ['Algebra', 'Linear Equations'],
-    date: '2025-01-10',
-    duration: 45,
-    totalMarks: 50,
-    status: 'upcoming',
-  },
-  {
-    id: '2',
-    name: 'Physics Mid-Term Exam',
-    type: 'Mid-Term',
-    subject: 'Physics',
-    chapters: ['Mechanics', 'Thermodynamics', 'Waves'],
-    date: '2025-01-15',
-    duration: 120,
-    totalMarks: 100,
-    status: 'upcoming',
-  },
-  {
-    id: '3',
-    name: 'Chemistry Practice Test',
-    type: 'Practice',
-    subject: 'Chemistry',
-    chapters: ['Organic Chemistry'],
-    date: '2025-01-05',
-    duration: 30,
-    totalMarks: 30,
-    status: 'completed',
-  },
-  {
-    id: '4',
-    name: 'Biology Final Exam',
-    type: 'Final',
-    subject: 'Biology',
-    chapters: ['Cell Biology', 'Genetics', 'Ecology', 'Human Anatomy'],
-    date: '2024-12-20',
-    duration: 180,
-    totalMarks: 150,
-    status: 'completed',
-  },
-];
+export const mockTests: Test[] = [];
 
-export const mockTestResults: TestResult[] = [
-  {
-    testId: '3',
-    score: 24,
-    totalMarks: 30,
-    percentage: 80,
-    sectionBreakdown: [
-      { section: 'MCQ', obtained: 12, total: 15 },
-      { section: 'Fill in the Blanks', obtained: 6, total: 7 },
-      { section: 'Short Answer', obtained: 6, total: 8 },
-    ],
-    aiFeedback: 'Excellent understanding of organic chemistry concepts. Consider reviewing reaction mechanisms for better performance.',
-    teacherRemarks: 'Great work! Keep practicing organic reactions.',
-    submittedAt: '2025-01-05T10:30:00Z',
-  },
-  {
-    testId: '4',
-    score: 128,
-    totalMarks: 150,
-    percentage: 85,
-    sectionBreakdown: [
-      { section: 'MCQ', obtained: 45, total: 50 },
-      { section: 'Fill in the Blanks', obtained: 28, total: 30 },
-      { section: 'Short Answer', obtained: 55, total: 70 },
-    ],
-    aiFeedback: 'Strong grasp of biological concepts. The short answer section shows good analytical skills. Minor improvements needed in genetics terminology.',
-    teacherRemarks: 'Outstanding performance! Your dedication shows.',
-    submittedAt: '2024-12-20T14:45:00Z',
-  },
-];
+export const mockTestResults: TestResult[] = [];
 
 export const mockQuestions = {
   mcq: [
@@ -169,52 +95,7 @@ export const mockQuestions = {
   ],
 };
 
-export const mockSubmissions: Submission[] = [
-  {
-    id: 'sub1',
-    studentId: 'std1',
-    studentName: 'Alice Johnson',
-    testId: '1',
-    testName: 'Mathematics Unit Test 1',
-    submittedAt: '2025-01-10T10:45:00Z',
-    status: 'pending',
-    aiScore: 42,
-    aiConfidence: 87,
-  },
-  {
-    id: 'sub2',
-    studentId: 'std2',
-    studentName: 'Bob Smith',
-    testId: '1',
-    testName: 'Mathematics Unit Test 1',
-    submittedAt: '2025-01-10T10:50:00Z',
-    status: 'pending',
-    aiScore: 38,
-    aiConfidence: 92,
-  },
-  {
-    id: 'sub3',
-    studentId: 'std3',
-    studentName: 'Carol Davis',
-    testId: '2',
-    testName: 'Physics Mid-Term Exam',
-    submittedAt: '2025-01-15T14:20:00Z',
-    status: 'reviewed',
-    aiScore: 85,
-    aiConfidence: 78,
-  },
-  {
-    id: 'sub4',
-    studentId: 'std4',
-    studentName: 'David Wilson',
-    testId: '3',
-    testName: 'Chemistry Practice Test',
-    submittedAt: '2025-01-05T09:30:00Z',
-    status: 'approved',
-    aiScore: 27,
-    aiConfidence: 95,
-  },
-];
+export const mockSubmissions: Submission[] = [];
 
 export const mockStudentAnswers = {
   mcq: [
@@ -233,8 +114,8 @@ export const mockStudentAnswers = {
 };
 
 export const teacherStats = {
-  totalStudents: 127,
-  totalTests: 24,
-  pendingSubmissions: 15,
-  averageScore: 78.5,
+  totalStudents: 0,
+  totalTests: 0,
+  pendingSubmissions: 0,
+  averageScore: 0,
 };

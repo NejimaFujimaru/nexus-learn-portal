@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
-import { mockTests, mockTestResults } from '@/data/mockData';
 import { FileText, Trophy, TrendingUp, Calendar } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { dbOperations, Test, Submission } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,10 +18,24 @@ import {
 
 const AcademicHistory = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Student';
+  const studentId = user?.uid || '';
   
-  const completedTests = mockTests.filter(t => t.status === 'completed' || t.status === 'pending-review');
-  
-  const getResult = (testId: string) => mockTestResults.find(r => r.testId === testId);
+  const [tests, setTests] = useState<Test[]>([]);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+
+  useEffect(() => {
+    const unsubTests = dbOperations.subscribeToTests(setTests);
+    const unsubSubmissions = dbOperations.subscribeToSubmissions((data) => {
+      setSubmissions(data.filter(s => s.studentId === studentId));
+    });
+    return () => { unsubTests(); unsubSubmissions(); };
+  }, [studentId]);
+
+  const submittedTestIds = submissions.map(s => s.testId);
+  const completedTests = tests.filter(t => submittedTestIds.includes(t.id));
+  const upcomingTests = tests.filter(t => !submittedTestIds.includes(t.id));
   
   const getGradeColor = (percentage?: number) => {
     if (!percentage) return 'text-muted-foreground';
@@ -30,17 +46,17 @@ const AcademicHistory = () => {
     return 'text-destructive';
   };
 
-  const averageScore = mockTestResults.length > 0
-    ? Math.round(mockTestResults.reduce((acc, r) => acc + r.percentage, 0) / mockTestResults.length)
+  const averageScore = submissions.length > 0 && submissions.some(s => s.totalAutoScore !== undefined)
+    ? Math.round(submissions.reduce((acc, s) => acc + (s.totalAutoScore || 0), 0) / submissions.length)
     : 0;
 
-  const highestScore = mockTestResults.length > 0
-    ? Math.max(...mockTestResults.map(r => r.percentage))
+  const highestScore = submissions.length > 0 && submissions.some(s => s.totalAutoScore !== undefined)
+    ? Math.max(...submissions.map(s => s.totalAutoScore || 0))
     : 0;
 
   return (
     <div className="min-h-screen bg-background">
-      <Header userType="student" userName="Alex Thompson" />
+      <Header userType="student" userName={userName} />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
@@ -100,7 +116,7 @@ const AcademicHistory = () => {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-card-foreground">
-                    {mockTests.filter(t => t.status === 'upcoming').length}
+                    {upcomingTests.length}
                   </p>
                   <p className="text-sm text-muted-foreground">Upcoming Tests</p>
                 </div>
@@ -130,26 +146,26 @@ const AcademicHistory = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {completedTests.map((test) => {
-                    const result = getResult(test.id);
+                {completedTests.length > 0 ? completedTests.map((test) => {
+                    const submission = submissions.find(s => s.testId === test.id);
                     return (
                       <TableRow key={test.id}>
-                        <TableCell className="font-medium">{test.name}</TableCell>
-                        <TableCell>{test.subject}</TableCell>
+                        <TableCell className="font-medium">{test.title}</TableCell>
+                        <TableCell>{test.subjectId || '-'}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{test.type}</Badge>
                         </TableCell>
                         <TableCell>
-                          {new Date(test.date).toLocaleDateString('en-US', {
+                          {new Date(test.createdAt).toLocaleDateString('en-US', {
                             month: 'short',
                             day: 'numeric',
                             year: 'numeric',
                           })}
                         </TableCell>
                         <TableCell>
-                          {result ? (
-                            <span className={`font-semibold ${getGradeColor(result.percentage)}`}>
-                              {result.score}/{result.totalMarks} ({result.percentage}%)
+                          {submission?.totalAutoScore !== undefined ? (
+                            <span className={`font-semibold ${getGradeColor(submission.totalAutoScore)}`}>
+                              {submission.totalAutoScore}
                             </span>
                           ) : (
                             <span className="text-muted-foreground">-</span>
@@ -157,14 +173,14 @@ const AcademicHistory = () => {
                         </TableCell>
                         <TableCell>
                           <Badge 
-                            variant={result ? "default" : "secondary"}
-                            className={result ? "bg-chart-1/20 text-chart-1" : "bg-chart-5/20 text-chart-5"}
+                            variant={submission?.status === 'graded' ? "default" : "secondary"}
+                            className={submission?.status === 'graded' ? "bg-chart-1/20 text-chart-1" : "bg-chart-5/20 text-chart-5"}
                           >
-                            {result ? 'Graded' : 'Pending'}
+                            {submission?.status === 'graded' ? 'Graded' : 'Pending'}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {result ? (
+                          {submission?.status === 'graded' ? (
                             <Button 
                               variant="outline" 
                               size="sm"
@@ -180,7 +196,13 @@ const AcademicHistory = () => {
                         </TableCell>
                       </TableRow>
                     );
-                  })}
+                  }) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No test history yet
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
