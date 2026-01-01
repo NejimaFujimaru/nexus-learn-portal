@@ -27,7 +27,7 @@ import {
   Loader2,
   Eye
 } from 'lucide-react';
-import { getSubjects, saveTest } from '@/lib/firebase';
+import { getSubjects, saveTest, dbOperations } from '@/lib/firebase';
 import { toast } from '@/hooks/use-toast';
 
 interface Question {
@@ -42,7 +42,13 @@ interface Question {
 interface Subject {
   id: string;
   name: string;
-  chapters: { id: string; title: string; content: string }[];
+}
+
+interface Chapter {
+  id: string;
+  subjectId: string;
+  title: string;
+  content: string;
 }
 
 const TestCreationWizard = () => {
@@ -55,6 +61,7 @@ const TestCreationWizard = () => {
   const [testTitle, setTestTitle] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
+  const [subjectChapters, setSubjectChapters] = useState<Chapter[]>([]);
   const [testType, setTestType] = useState<'weekly' | 'monthly'>('weekly');
   const [duration, setDuration] = useState(30);
   const [totalMarks, setTotalMarks] = useState(100);
@@ -77,6 +84,26 @@ const TestCreationWizard = () => {
     loadSubjects();
   }, []);
 
+  // Fetch chapters when subject changes
+  useEffect(() => {
+    if (selectedSubject) {
+      const fetchChapters = async () => {
+        try {
+          const chapters = await dbOperations.getChaptersBySubject(selectedSubject);
+          setSubjectChapters(chapters);
+        } catch (error) {
+          console.error('Error fetching chapters:', error);
+          setSubjectChapters([]);
+        }
+      };
+      fetchChapters();
+      setSelectedChapters([]); // Reset selected chapters when subject changes
+    } else {
+      setSubjectChapters([]);
+      setSelectedChapters([]);
+    }
+  }, [selectedSubject]);
+
   const loadSubjects = async () => {
     try {
       const data = await getSubjects();
@@ -87,6 +114,7 @@ const TestCreationWizard = () => {
   };
 
   const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
+  const hasChapters = subjectChapters.length > 0;
   const progressPercentage = ((currentStep - 1) / 2) * 100;
 
   const validateStep1 = () => {
@@ -99,8 +127,7 @@ const TestCreationWizard = () => {
       return false;
     }
     // Only validate chapters if the selected subject has chapters
-    const subjectHasChapters = selectedSubjectData?.chapters && selectedSubjectData.chapters.length > 0;
-    if (subjectHasChapters && selectedChapters.length === 0) {
+    if (hasChapters && selectedChapters.length === 0) {
       toast({ title: 'Error', description: 'Please select at least one chapter', variant: 'destructive' });
       return false;
     }
@@ -318,10 +345,10 @@ const TestCreationWizard = () => {
 
               {selectedSubjectData && (
                 <div className="space-y-2">
-                  <Label>Chapters {selectedSubjectData.chapters?.length > 0 ? '*' : '(Optional)'}</Label>
-                  {selectedSubjectData.chapters?.length > 0 ? (
+                  <Label>Chapters {hasChapters ? '*' : '(Optional)'}</Label>
+                  {hasChapters ? (
                     <div className="border rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
-                      {selectedSubjectData.chapters.map(chapter => (
+                      {subjectChapters.map(chapter => (
                         <div key={chapter.id} className="flex items-center space-x-2">
                           <Checkbox
                             id={chapter.id}
