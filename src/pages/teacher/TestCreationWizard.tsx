@@ -27,8 +27,8 @@ import {
   Loader2,
   Eye
 } from 'lucide-react';
-import { getSubjects, database } from '@/lib/firebase';
-import { ref, query, orderByChild, equalTo, get, push, set } from 'firebase/database';
+import { getSubjects, database, dbOperations } from '@/lib/firebase';
+import { ref, get, push, set } from 'firebase/database';
 import { toast } from '@/hooks/use-toast';
 
 interface Question {
@@ -87,38 +87,55 @@ const TestCreationWizard = () => {
 
   // Fetch chapters when subject changes (Realtime Database)
   useEffect(() => {
-    if (selectedSubject) {
-      const fetchChapters = async () => {
-        try {
-          const chaptersRef = ref(database, 'chapters');
-          const q = query(chaptersRef, orderByChild('subjectId'), equalTo(selectedSubject));
-
-          const snapshot = await get(q);
-
-          if (snapshot.exists()) {
-            const chapters: Chapter[] = [];
-            snapshot.forEach((child) => {
-              chapters.push({
-                id: child.key as string,
-                ...(child.val() as Omit<Chapter, 'id'>)
-              });
-            });
-            setSubjectChapters(chapters);
-          } else {
-            setSubjectChapters([]);
-          }
-        } catch (error) {
-          console.error('Error fetching chapters:', error);
-          setSubjectChapters([]);
-        }
-      };
-
-      fetchChapters();
-      setSelectedChapters([]); // Reset selected chapters when subject changes
-    } else {
+    if (!selectedSubject) {
       setSubjectChapters([]);
       setSelectedChapters([]);
+      return;
     }
+
+    const fetchChapters = async () => {
+      try {
+        console.log('Fetching chapters for subject:', selectedSubject);
+
+        // Prefer chapters embedded in the selected subject (subjects/{id}/chapters)
+        const subjectPath = `subjects/${selectedSubject}`;
+        const subjectSnap = await get(ref(database, subjectPath));
+        const subjectVal = subjectSnap.exists() ? subjectSnap.val() : null;
+        console.log('Subject snapshot:', subjectPath, subjectVal);
+
+        if (subjectVal?.chapters) {
+          const raw = subjectVal.chapters;
+          const chapters: Chapter[] = Array.isArray(raw)
+            ? raw
+                .filter(Boolean)
+                .map((c: any, idx: number) => ({
+                  id: c?.id ?? `${idx}`,
+                  subjectId: c?.subjectId ?? selectedSubject,
+                  title: c?.title ?? 'Untitled Chapter',
+                  content: c?.content ?? ''
+                }))
+            : Object.entries(raw).map(([key, val]: any) => ({
+                id: val?.id ?? key,
+                subjectId: val?.subjectId ?? selectedSubject,
+                title: val?.title ?? 'Untitled Chapter',
+                content: val?.content ?? ''
+              }));
+
+          setSubjectChapters(chapters);
+          return;
+        }
+
+        // Fallback to global chapters collection
+        const chapters = await dbOperations.getChaptersBySubject(selectedSubject);
+        setSubjectChapters(chapters as unknown as Chapter[]);
+      } catch (error) {
+        console.error('Error fetching chapters:', error);
+        setSubjectChapters([]);
+      }
+    };
+
+    fetchChapters();
+    setSelectedChapters([]); // Reset selected chapters when subject changes
   }, [selectedSubject]);
 
   const loadSubjects = async () => {
