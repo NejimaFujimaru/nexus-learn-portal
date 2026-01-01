@@ -51,7 +51,15 @@ export const getUserRole = async (uid: string): Promise<'teacher' | 'student' | 
 // Standalone database functions for new components
 export const getSubjects = async () => {
   const snapshot = await get(ref(database, 'subjects'));
-  return snapshot.exists() ? Object.values(snapshot.val()) : [];
+  if (!snapshot.exists()) return [];
+  const data = snapshot.val();
+  // Support both shapes:
+  // 1) subjects/{id} = { id, name, ... }
+  // 2) subjects/{id} = { name, ... } (id stored as key)
+  return Object.entries(data).map(([key, value]: any) => ({
+    id: value?.id ?? key,
+    ...value
+  }));
 };
 
 export const saveSubject = async (subjectData: { name: string; chapters: any[] }) => {
@@ -175,7 +183,10 @@ export const dbOperations = {
     const snapshot = await get(ref(database, 'subjects'));
     if (!snapshot.exists()) return [];
     const data = snapshot.val();
-    return Object.values(data);
+    return Object.entries(data).map(([key, value]: any) => ({
+      id: value?.id ?? key,
+      ...value
+    })) as Subject[];
   },
 
   async updateSubject(id: string, name: string): Promise<void> {
