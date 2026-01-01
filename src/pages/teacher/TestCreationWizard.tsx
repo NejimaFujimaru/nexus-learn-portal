@@ -27,7 +27,8 @@ import {
   Loader2,
   Eye
 } from 'lucide-react';
-import { getSubjects, saveTest, dbOperations } from '@/lib/firebase';
+import { getSubjects, database } from '@/lib/firebase';
+import { ref, query, orderByChild, equalTo, get, push, set } from 'firebase/database';
 import { toast } from '@/hooks/use-toast';
 
 interface Question {
@@ -84,18 +85,34 @@ const TestCreationWizard = () => {
     loadSubjects();
   }, []);
 
-  // Fetch chapters when subject changes
+  // Fetch chapters when subject changes (Realtime Database)
   useEffect(() => {
     if (selectedSubject) {
       const fetchChapters = async () => {
         try {
-          const chapters = await dbOperations.getChaptersBySubject(selectedSubject);
-          setSubjectChapters(chapters);
+          const chaptersRef = ref(database, 'chapters');
+          const q = query(chaptersRef, orderByChild('subjectId'), equalTo(selectedSubject));
+
+          const snapshot = await get(q);
+
+          if (snapshot.exists()) {
+            const chapters: Chapter[] = [];
+            snapshot.forEach((child) => {
+              chapters.push({
+                id: child.key as string,
+                ...(child.val() as Omit<Chapter, 'id'>)
+              });
+            });
+            setSubjectChapters(chapters);
+          } else {
+            setSubjectChapters([]);
+          }
         } catch (error) {
           console.error('Error fetching chapters:', error);
           setSubjectChapters([]);
         }
       };
+
       fetchChapters();
       setSelectedChapters([]); // Reset selected chapters when subject changes
     } else {
@@ -227,7 +244,12 @@ const TestCreationWizard = () => {
   const handlePublish = async () => {
     setLoading(true);
     try {
+      // Create test id first
+      const testRef = push(ref(database, 'tests'));
+      const testId = testRef.key as string;
+
       const testData = {
+        id: testId,
         title: testTitle,
         subjectId: selectedSubject,
         subjectName: selectedSubjectData?.name,
@@ -235,14 +257,21 @@ const TestCreationWizard = () => {
         type: testType,
         duration,
         totalMarks,
-        questions
+        published: true,
+        createdAt: new Date().toISOString(),
       };
 
-      await saveTest(testData);
+      console.log('Saving to:', `tests/${testId}`, testData);
+      await set(testRef, testData);
+
+      console.log('Saving to:', `questions/${testId}`, questions);
+      await set(ref(database, `questions/${testId}`), questions);
+
       toast({ title: 'Success!', description: 'Test published successfully!' });
       navigate('/teacher/dashboard');
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to publish test', variant: 'destructive' });
+      console.error('Publish failed:', error);
+      toast({ title: 'Error', description: 'Failed to save. Check database connection.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
