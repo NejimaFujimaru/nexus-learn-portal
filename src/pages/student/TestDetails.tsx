@@ -1,21 +1,53 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
-import { mockTests } from '@/data/mockData';
-import { ArrowLeft, Calendar, Clock, FileText, BookOpen, AlertCircle } from 'lucide-react';
+import { dbOperations, Test } from '@/lib/firebase';
+import { ArrowLeft, Calendar, Clock, FileText, BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/hooks/useAuth';
 
 const TestDetails = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
-  const test = mockTests.find((t) => t.id === testId);
+  const { user } = useAuth();
+  const [test, setTest] = useState<Test | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Student';
+
+  useEffect(() => {
+    const loadTest = async () => {
+      try {
+        const tests = await dbOperations.getTests();
+        const found = tests.find(t => t.id === testId);
+        setTest(found || null);
+      } catch (error) {
+        console.error('Error loading test:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadTest();
+  }, [testId]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header userType="student" userName={userName} />
+        <main className="max-w-4xl mx-auto px-4 py-8 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </main>
+      </div>
+    );
+  }
 
   if (!test) {
     return (
       <div className="min-h-screen bg-background">
-        <Header userType="student" userName="Alex Thompson" />
+        <Header userType="student" userName={userName} />
         <main className="max-w-4xl mx-auto px-4 py-8">
           <Card className="bg-card">
             <CardContent className="flex flex-col items-center justify-center py-12">
@@ -33,7 +65,7 @@ const TestDetails = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header userType="student" userName="Alex Thompson" />
+      <Header userType="student" userName={userName} />
       
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link 
@@ -48,9 +80,9 @@ const TestDetails = () => {
           <CardHeader>
             <div className="flex flex-wrap gap-2 mb-2">
               <Badge variant="outline">{test.type}</Badge>
-              <Badge variant="secondary">{test.subject}</Badge>
+              {test.subjectName && <Badge variant="secondary">{test.subjectName}</Badge>}
             </div>
-            <CardTitle className="text-2xl">{test.name}</CardTitle>
+            <CardTitle className="text-2xl">{test.title}</CardTitle>
             <CardDescription>
               Review the test details before starting
             </CardDescription>
@@ -74,7 +106,7 @@ const TestDetails = () => {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Subject</p>
-                    <p className="font-medium text-foreground">{test.subject}</p>
+                    <p className="font-medium text-foreground">{test.subjectName || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -95,9 +127,9 @@ const TestDetails = () => {
                     <Calendar className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Scheduled Date</p>
+                    <p className="text-sm text-muted-foreground">Created Date</p>
                     <p className="font-medium text-foreground">
-                      {new Date(test.date).toLocaleDateString('en-US', {
+                      {new Date(test.createdAt).toLocaleDateString('en-US', {
                         weekday: 'long',
                         year: 'numeric',
                         month: 'long',
@@ -111,23 +143,10 @@ const TestDetails = () => {
 
             <Separator />
 
-            <div>
-              <h3 className="font-semibold text-foreground mb-3">Chapters Covered</h3>
-              <div className="flex flex-wrap gap-2">
-                {test.chapters.map((chapter, index) => (
-                  <Badge key={index} variant="outline" className="bg-accent">
-                    {chapter}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            <Separator />
-
             <div className="flex items-center justify-between p-4 bg-accent rounded-lg">
               <div>
                 <p className="text-sm text-muted-foreground">Total Marks</p>
-                <p className="text-2xl font-bold text-accent-foreground">{test.totalMarks}</p>
+                <p className="text-2xl font-bold text-accent-foreground">{test.totalMarks || 'N/A'}</p>
               </div>
               <Button 
                 size="lg"

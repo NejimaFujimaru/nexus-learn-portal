@@ -139,8 +139,10 @@ export interface Test {
   id: string;
   title: string;
   subjectId: string;
+  subjectName?: string;
   chapterIds: string[];
   duration: number;
+  totalMarks?: number;
   type: 'weekly' | 'monthly' | 'quiz' | 'final';
   createdAt: string;
   published: boolean;
