@@ -274,7 +274,24 @@ export const dbOperations = {
     const snapshot = await get(ref(database, 'questions'));
     if (!snapshot.exists()) return [];
     const data = snapshot.val();
-    return Object.values(data).filter((q: any) => q.testId === testId) as Question[];
+    // Handle both flat collection (q.testId) and nested structure (questions/{testId}/...)
+    const allQuestions = Object.entries(data).flatMap(([key, value]: [string, any]) => {
+      // If this is a nested structure where key is testId
+      if (key === testId && typeof value === 'object' && !value.testId) {
+        // It's nested under questions/{testId}
+        return Object.values(value).map((q: any, idx: number) => ({
+          ...q,
+          id: q.id || `${testId}-${idx}`,
+          testId: testId
+        }));
+      }
+      // If it's a flat structure with testId property
+      if (value?.testId === testId) {
+        return [value];
+      }
+      return [];
+    });
+    return allQuestions as Question[];
   },
 
   async updateQuestion(id: string, updates: Partial<Question>): Promise<void> {
