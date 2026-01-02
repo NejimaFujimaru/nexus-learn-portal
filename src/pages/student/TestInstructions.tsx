@@ -1,23 +1,38 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
-import { mockTests } from '@/data/mockData';
-import { ArrowLeft, AlertTriangle, CheckCircle2, Brain, Clock, Shield } from 'lucide-react';
+import { dbOperations, Test } from '@/lib/firebase';
+import { ArrowLeft, AlertTriangle, CheckCircle2, Brain, Clock, Shield, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 
 const TestInstructions = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [accepted, setAccepted] = useState(false);
-  const test = mockTests.find((t) => t.id === testId);
+  const [test, setTest] = useState<Test | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!test) {
-    navigate('/student/dashboard');
-    return null;
-  }
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Student';
+
+  useEffect(() => {
+    const loadTest = async () => {
+      try {
+        const tests = await dbOperations.getTests();
+        const found = tests.find(t => t.id === testId);
+        setTest(found || null);
+      } catch (error) {
+        console.error('Error loading test:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadTest();
+  }, [testId]);
 
   const instructions = [
     'Read each question carefully before answering.',
@@ -29,9 +44,25 @@ const TestInstructions = () => {
     'Contact support immediately if you face technical issues.',
   ];
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header userType="student" userName={userName} />
+        <main className="max-w-4xl mx-auto px-4 py-8 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </main>
+      </div>
+    );
+  }
+
+  if (!test) {
+    navigate('/student/dashboard');
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      <Header userType="student" userName="Alex Thompson" />
+      <Header userType="student" userName={userName} />
       
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link 
@@ -45,7 +76,7 @@ const TestInstructions = () => {
         <Card className="bg-card mb-6">
           <CardHeader>
             <CardTitle className="text-2xl">Test Instructions</CardTitle>
-            <CardDescription>{test.name}</CardDescription>
+            <CardDescription>{test.title}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Test Info Summary */}
@@ -56,7 +87,7 @@ const TestInstructions = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-accent-foreground" />
-                <span className="text-foreground">{test.totalMarks} marks</span>
+                <span className="text-foreground">{test.totalMarks || 'N/A'} marks</span>
               </div>
             </div>
 
