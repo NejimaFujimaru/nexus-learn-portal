@@ -69,11 +69,7 @@ const StudentDashboard = () => {
             {pendingTests.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {pendingTests.map((test) => (
-                  <TestCard key={test.id} test={{
-                    id: test.id, name: test.title, type: test.type as any,
-                    subject: '', chapters: [], date: test.createdAt,
-                    duration: test.duration, totalMarks: 0, status: 'upcoming'
-                  }} />
+                  <TestCard key={test.id} test={{...test, status: 'upcoming'}} />
                 ))}
               </div>
             ) : (
@@ -84,11 +80,7 @@ const StudentDashboard = () => {
             {completedTests.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {completedTests.map((test) => (
-                  <TestCard key={test.id} test={{
-                    id: test.id, name: test.title, type: test.type as any,
-                    subject: '', chapters: [], date: test.createdAt,
-                    duration: test.duration, totalMarks: 0, status: 'completed'
-                  }} />
+                  <TestCard key={test.id} test={{...test, status: 'completed'}} />
                 ))}
               </div>
             ) : (

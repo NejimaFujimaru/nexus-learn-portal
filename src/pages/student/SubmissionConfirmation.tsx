@@ -1,13 +1,26 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { mockTests } from '@/data/mockData';
-import { CheckCircle2, Clock, Brain, Home } from 'lucide-react';
+import { CheckCircle2, Clock, Brain, Home, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { dbOperations, Test } from '@/lib/firebase';
 
 const SubmissionConfirmation = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
-  const test = mockTests.find((t) => t.id === testId);
+  const [test, setTest] = useState<Test | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadTest = async () => {
+      if (!testId) return;
+      const tests = await dbOperations.getTests();
+      const found = tests.find(t => t.id === testId);
+      setTest(found || null);
+      setLoading(false);
+    };
+    loadTest();
+  }, [testId]);
 
   const submissionTime = new Date().toLocaleString('en-US', {
     weekday: 'long',
@@ -17,6 +30,14 @@ const SubmissionConfirmation = () => {
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -36,7 +57,7 @@ const SubmissionConfirmation = () => {
           <div className="p-4 bg-accent rounded-lg space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Test</span>
-              <span className="font-medium text-foreground">{test?.name || 'Mathematics Unit Test 1'}</span>
+              <span className="font-medium text-foreground">{test?.title || 'Test'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Submitted At</span>
