@@ -269,7 +269,7 @@ const TestCreationWizard = () => {
         id: testId,
         title: testTitle,
         subjectId: selectedSubject,
-        subjectName: selectedSubjectData?.name,
+        subjectName: selectedSubjectData?.name || '',
         chapterIds: selectedChapters,
         type: testType,
         duration,
@@ -281,8 +281,28 @@ const TestCreationWizard = () => {
       console.log('Saving to:', `tests/${testId}`, testData);
       await set(testRef, testData);
 
-      console.log('Saving to:', `questions/${testId}`, questions);
-      await set(ref(database, `questions/${testId}`), questions);
+      // Map question types and save each question with testId reference
+      const questionsToSave = questions.map(q => {
+        // Map 'blank' to 'fillBlank' and 'short' to 'shortAnswer' for Firebase types
+        const mappedType = q.type === 'blank' ? 'fillBlank' : q.type === 'short' ? 'shortAnswer' : 'mcq';
+        return {
+          id: q.id,
+          testId: testId,
+          type: mappedType,
+          text: q.text,
+          marks: q.marks,
+          // Only include options for MCQ, and ensure they are valid strings
+          ...(mappedType === 'mcq' && q.options ? { options: q.options.filter(o => o && o.trim()) } : {}),
+          // Include correctAnswer for mcq and fillBlank
+          ...(mappedType !== 'shortAnswer' && q.correctAnswer !== undefined ? { correctAnswer: q.correctAnswer } : {})
+        };
+      });
+
+      // Save questions to global questions collection with individual keys
+      for (const question of questionsToSave) {
+        const qRef = push(ref(database, 'questions'));
+        await set(qRef, { ...question, id: qRef.key });
+      }
 
       toast({ title: 'Success!', description: 'Test published successfully!' });
       navigate('/teacher/dashboard');
