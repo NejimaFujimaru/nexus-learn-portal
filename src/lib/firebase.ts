@@ -143,7 +143,8 @@ export interface Test {
   chapterIds: string[];
   duration: number;
   totalMarks?: number;
-  type: 'weekly' | 'monthly' | 'quiz' | 'final';
+  type: 'weekly' | 'monthly' | 'quiz' | 'final' | 'Quiz' | 'Mid-Term' | 'Final' | 'Practice';
+  status?: 'upcoming' | 'completed' | 'in-progress' | 'pending-review' | 'published' | 'draft';
   createdAt: string;
   published: boolean;
 }

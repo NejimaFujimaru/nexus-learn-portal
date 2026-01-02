@@ -1,20 +1,47 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
-import { mockTests, mockTestResults } from '@/data/mockData';
-import { ArrowLeft, Trophy, Brain, MessageSquare, TrendingUp, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Trophy, Brain, MessageSquare, TrendingUp, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { dbOperations, Test, Submission } from '@/lib/firebase';
 
 const TestResult = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
-  const test = mockTests.find((t) => t.id === testId);
-  const result = mockTestResults.find((r) => r.testId === testId);
+  const [test, setTest] = useState<Test | null>(null);
+  const [submission, setSubmission] = useState<Submission | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!test || !result) {
+  useEffect(() => {
+    const loadData = async () => {
+      if (!testId) return;
+      const tests = await dbOperations.getTests();
+      const found = tests.find(t => t.id === testId);
+      setTest(found || null);
+
+      // Try to find submission for this test
+      const submissions = await dbOperations.getSubmissions();
+      const sub = submissions.find(s => s.testId === testId);
+      setSubmission(sub || null);
+      
+      setLoading(false);
+    };
+    loadData();
+  }, [testId]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!test || !submission) {
     return (
       <div className="min-h-screen bg-background">
         <Header userType="student" userName="Alex Thompson" />
@@ -32,6 +59,10 @@ const TestResult = () => {
       </div>
     );
   }
+
+  const totalScore = submission.totalAutoScore || 0;
+  const totalMarks = test.totalMarks || 100;
+  const percentage = Math.round((totalScore / totalMarks) * 100);
 
   const getGradeColor = (percentage: number) => {
     if (percentage >= 90) return 'text-chart-1';
@@ -70,19 +101,19 @@ const TestResult = () => {
                 <Trophy className="h-12 w-12 text-primary" />
               </div>
             </div>
-            <CardTitle className="text-xl">{test.name}</CardTitle>
-            <CardDescription>{test.subject}</CardDescription>
+            <CardTitle className="text-xl">{test.title}</CardTitle>
+            <CardDescription>{test.subjectName || test.subjectId}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-center mb-6">
-              <div className={`text-6xl font-bold ${getGradeColor(result.percentage)}`}>
-                {result.percentage}%
+              <div className={`text-6xl font-bold ${getGradeColor(percentage)}`}>
+                {percentage}%
               </div>
               <div className="text-lg text-muted-foreground mt-2">
-                {result.score} / {result.totalMarks} marks
+                {totalScore} / {totalMarks} marks
               </div>
-              <Badge className={`mt-3 ${getGradeColor(result.percentage)}`} variant="secondary">
-                {getGradeLabel(result.percentage)}
+              <Badge className={`mt-3 ${getGradeColor(percentage)}`} variant="secondary">
+                {getGradeLabel(percentage)}
               </Badge>
             </div>
 
@@ -95,20 +126,24 @@ const TestResult = () => {
                 Section Breakdown
               </h3>
               <div className="space-y-4">
-                {result.sectionBreakdown.map((section, index) => {
-                  const sectionPercentage = (section.obtained / section.total) * 100;
-                  return (
-                    <div key={index} className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-foreground font-medium">{section.section}</span>
-                        <span className="text-muted-foreground">
-                          {section.obtained} / {section.total} ({Math.round(sectionPercentage)}%)
-                        </span>
-                      </div>
-                      <Progress value={sectionPercentage} className="h-2" />
+                {submission.mcqScore !== undefined && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-foreground font-medium">MCQ</span>
+                      <span className="text-muted-foreground">{submission.mcqScore} marks</span>
                     </div>
-                  );
-                })}
+                    <Progress value={(submission.mcqScore / totalMarks) * 100} className="h-2" />
+                  </div>
+                )}
+                {submission.fillBlankScore !== undefined && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-foreground font-medium">Fill in the Blanks</span>
+                      <span className="text-muted-foreground">{submission.fillBlankScore} marks</span>
+                    </div>
+                    <Progress value={(submission.fillBlankScore / totalMarks) * 100} className="h-2" />
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -125,11 +160,12 @@ const TestResult = () => {
           </CardHeader>
           <CardContent>
             <div className="p-4 bg-accent rounded-lg">
-              <p className="text-foreground leading-relaxed">{result.aiFeedback}</p>
+              <p className="text-foreground leading-relaxed">
+                {submission.status === 'graded' 
+                  ? 'Your test has been reviewed. Check the breakdown above for detailed scores.'
+                  : 'Your test is pending review. Results will be available soon.'}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground mt-3 italic">
-              * This feedback was generated by AI and reviewed by your teacher.
-            </p>
           </CardContent>
         </Card>
 
@@ -144,7 +180,9 @@ const TestResult = () => {
           </CardHeader>
           <CardContent>
             <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-              <p className="text-foreground leading-relaxed">{result.teacherRemarks}</p>
+              <p className="text-foreground leading-relaxed">
+                {submission.teacherRemarks || 'No remarks yet. Check back after your teacher reviews your submission.'}
+              </p>
             </div>
           </CardContent>
         </Card>

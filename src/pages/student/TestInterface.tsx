@@ -82,6 +82,19 @@ const TestInterface = () => {
 
   if (loading || !test) return <div className="min-h-screen bg-background flex items-center justify-center">Loading...</div>;
 
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="p-6 text-center">
+            <p className="text-muted-foreground mb-4">No questions found for this test.</p>
+            <Button onClick={() => navigate('/student/dashboard')}>Back to Dashboard</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const q = questions[currentQuestion];
   const progress = (Object.keys(answers).length / questions.length) * 100;
 
