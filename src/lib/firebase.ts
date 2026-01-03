@@ -163,6 +163,7 @@ export interface Submission {
   totalAutoScore: number;
   shortAnswerMarks?: number;
   questionMarks?: Record<string, number>;
+  manualOverrides?: Record<string, boolean>;
   totalManualMarks?: number;
   finalScore?: number;
   status: 'pending' | 'graded';

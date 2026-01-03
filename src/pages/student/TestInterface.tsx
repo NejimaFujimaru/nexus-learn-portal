@@ -52,6 +52,33 @@ const TestInterface = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Calculate similarity between two strings (0-1)
+  const calculateSimilarity = (str1: string, str2: string): number => {
+    const s1 = str1.toLowerCase().trim();
+    const s2 = str2.toLowerCase().trim();
+    if (s1 === s2) return 1;
+    if (s1.length === 0 || s2.length === 0) return 0;
+    
+    // Levenshtein distance
+    const matrix: number[][] = [];
+    for (let i = 0; i <= s1.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= s2.length; j++) matrix[0][j] = j;
+    
+    for (let i = 1; i <= s1.length; i++) {
+      for (let j = 1; j <= s2.length; j++) {
+        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
+        );
+      }
+    }
+    
+    const maxLen = Math.max(s1.length, s2.length);
+    return 1 - matrix[s1.length][s2.length] / maxLen;
+  };
+
   const handleSubmit = async () => {
     if (!test) return;
     let mcqScore = 0, fillBlankScore = 0;
@@ -59,10 +86,16 @@ const TestInterface = () => {
     
     questions.forEach(q => {
       const studentAnswer = answers[q.id];
-      if (q.type === 'mcq' && studentAnswer === q.correctAnswer) mcqScore += q.marks;
-      if (q.type === 'fillBlank' && typeof studentAnswer === 'string' && 
-          studentAnswer.toLowerCase().trim() === (q.correctAnswer as string).toLowerCase().trim()) 
-        fillBlankScore += q.marks;
+      // MCQ: compare as numbers (convert correctAnswer string to number)
+      if (q.type === 'mcq') {
+        const correctIndex = typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer) : q.correctAnswer;
+        if (studentAnswer === correctIndex) mcqScore += q.marks;
+      }
+      // Fill in blank: 65% similarity threshold
+      if (q.type === 'fillBlank' && typeof studentAnswer === 'string' && q.correctAnswer) {
+        const similarity = calculateSimilarity(studentAnswer, q.correctAnswer as string);
+        if (similarity >= 0.65) fillBlankScore += q.marks;
+      }
     });
 
     try {
