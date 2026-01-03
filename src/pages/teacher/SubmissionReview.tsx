@@ -8,9 +8,36 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import { dbOperations, Submission, Question } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
+
+// Calculate similarity between two strings (0-1)
+const calculateSimilarity = (str1: string, str2: string): number => {
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
+  if (s1 === s2) return 1;
+  if (s1.length === 0 || s2.length === 0) return 0;
+  
+  const matrix: number[][] = [];
+  for (let i = 0; i <= s1.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= s2.length; j++) matrix[0][j] = j;
+  
+  for (let i = 1; i <= s1.length; i++) {
+    for (let j = 1; j <= s2.length; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  
+  const maxLen = Math.max(s1.length, s2.length);
+  return 1 - matrix[s1.length][s2.length] / maxLen;
+};
 
 const SubmissionReview = () => {
   const { submissionId } = useParams();
@@ -21,6 +48,7 @@ const SubmissionReview = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [teacherRemarks, setTeacherRemarks] = useState('');
   const [questionMarks, setQuestionMarks] = useState<Record<string, number>>({});
+  const [manualOverrides, setManualOverrides] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,9 +59,10 @@ const SubmissionReview = () => {
         if (found) {
           setSubmission(found);
           setTeacherRemarks(found.teacherRemarks || '');
-          // Initialize question marks from saved data or default to 0
           const savedMarks = found.questionMarks || {};
           setQuestionMarks(savedMarks);
+          const savedOverrides = found.manualOverrides || {};
+          setManualOverrides(savedOverrides);
           const testQuestions = await dbOperations.getQuestionsByTest(found.testId);
           setQuestions(testQuestions);
         }
@@ -76,17 +105,59 @@ const SubmissionReview = () => {
     );
   }
 
+  // Helper to check if MCQ is correct
+  const isMcqCorrect = (q: Question, studentAnswer: string | number | undefined): boolean => {
+    const correctIndex = typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer) : q.correctAnswer;
+    return studentAnswer === correctIndex;
+  };
+
+  // Helper to check if fill-in-blank is correct (65% similarity)
+  const isFillBlankCorrect = (q: Question, studentAnswer: string | number | undefined): boolean => {
+    if (typeof studentAnswer !== 'string' || !q.correctAnswer) return false;
+    return calculateSimilarity(studentAnswer, q.correctAnswer as string) >= 0.65;
+  };
+
+  // Calculate scores with manual overrides
+  const calculateScores = () => {
+    let mcqScore = 0;
+    let fillBlankScore = 0;
+    
+    questions.forEach(q => {
+      const studentAnswer = getAnswerForQuestion(q.id);
+      const hasOverride = manualOverrides[q.id] !== undefined;
+      
+      if (q.type === 'mcq') {
+        const autoCorrect = isMcqCorrect(q, studentAnswer);
+        const isCorrect = hasOverride ? manualOverrides[q.id] : autoCorrect;
+        if (isCorrect) mcqScore += q.marks;
+      }
+      
+      if (q.type === 'fillBlank') {
+        const autoCorrect = isFillBlankCorrect(q, studentAnswer);
+        const isCorrect = hasOverride ? manualOverrides[q.id] : autoCorrect;
+        if (isCorrect) fillBlankScore += q.marks;
+      }
+    });
+    
+    return { mcqScore, fillBlankScore };
+  };
+
   const handleApprove = async () => {
     try {
-      // Calculate total manual marks from all questions
-      const totalManualMarks = Object.values(questionMarks).reduce((sum, m) => sum + (m || 0), 0);
+      const { mcqScore, fillBlankScore } = calculateScores();
+      const shortAnswerMarks = Object.values(questionMarks).reduce((sum, m) => sum + (m || 0), 0);
+      const totalScore = mcqScore + fillBlankScore + shortAnswerMarks;
       
       await dbOperations.updateSubmission(submission.id, {
         status: 'graded',
         teacherRemarks,
         questionMarks,
-        totalManualMarks,
-        finalScore: submission.totalAutoScore + totalManualMarks
+        manualOverrides,
+        mcqScore,
+        fillBlankScore,
+        totalAutoScore: mcqScore + fillBlankScore,
+        shortAnswerMarks,
+        finalScore: totalScore
       });
       toast({ title: "Submission graded successfully" });
       navigate('/teacher/submissions');
@@ -99,6 +170,10 @@ const SubmissionReview = () => {
     setQuestionMarks(prev => ({ ...prev, [questionId]: marks }));
   };
 
+  const handleOverrideToggle = (questionId: string, isCorrect: boolean) => {
+    setManualOverrides(prev => ({ ...prev, [questionId]: isCorrect }));
+  };
+
   const getAnswerForQuestion = (questionId: string) => {
     const answer = submission.answers.find(a => a.questionId === questionId);
     return answer?.answer;
@@ -107,6 +182,9 @@ const SubmissionReview = () => {
   const mcqQuestions = questions.filter(q => q.type === 'mcq');
   const fillBlankQuestions = questions.filter(q => q.type === 'fillBlank');
   const shortAnswerQuestions = questions.filter(q => q.type === 'shortAnswer');
+  const { mcqScore: calculatedMcqScore, fillBlankScore: calculatedFillBlankScore } = calculateScores();
+  const shortAnswerMarks = Object.values(questionMarks).reduce((s, m) => s + (m || 0), 0);
+  const totalScore = calculatedMcqScore + calculatedFillBlankScore + shortAnswerMarks;
 
   return (
     <div className="min-h-screen bg-background">
@@ -131,8 +209,8 @@ const SubmissionReview = () => {
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-center">
-                  <span className="text-3xl font-bold text-primary">{submission.totalAutoScore}</span>
-                  <p className="text-xs text-muted-foreground">Auto Score</p>
+                  <span className="text-3xl font-bold text-primary">{totalScore}</span>
+                  <p className="text-xs text-muted-foreground">Total Score</p>
                 </div>
                 <Badge className={submission.status === 'graded' ? 'bg-chart-1/20 text-chart-1' : 'bg-chart-3/20 text-chart-3'}>
                   {submission.status === 'graded' ? 'Graded' : 'Pending'}
@@ -150,40 +228,52 @@ const SubmissionReview = () => {
               <Card className="bg-card">
                 <CardHeader>
                   <CardTitle className="text-lg">Multiple Choice Questions</CardTitle>
-                  <CardDescription>MCQ Score: {submission.mcqScore}</CardDescription>
+                  <CardDescription>MCQ Score: {calculatedMcqScore}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {mcqQuestions.map((q, index) => {
                     const studentAnswer = getAnswerForQuestion(q.id);
-                    const isCorrect = studentAnswer === q.correctAnswer;
+                    const autoCorrect = isMcqCorrect(q, studentAnswer);
+                    const hasOverride = manualOverrides[q.id] !== undefined;
+                    const isCorrect = hasOverride ? manualOverrides[q.id] : autoCorrect;
+                    const correctIndex = typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer) : q.correctAnswer;
                     
                     return (
                       <div key={q.id} className="p-4 bg-accent rounded-lg">
                         <div className="flex items-start justify-between mb-2">
                           <p className="font-medium text-foreground">Q{index + 1}. {q.text}</p>
-                          {isCorrect ? (
-                            <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
-                          ) : (
-                            <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-                          )}
+                          <div className="flex items-center gap-2">
+                            {isCorrect ? (
+                              <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
+                            ) : (
+                              <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+                            )}
+                          </div>
                         </div>
                         <div className="space-y-1 text-sm">
                           {q.options?.map((option, optIndex) => (
                             <div 
                               key={optIndex}
                               className={`p-2 rounded ${
-                                optIndex === q.correctAnswer 
+                                optIndex === correctIndex 
                                   ? 'bg-chart-1/20 text-chart-1' 
-                                  : optIndex === studentAnswer && !isCorrect
+                                  : optIndex === studentAnswer && !autoCorrect
                                   ? 'bg-destructive/20 text-destructive'
                                   : 'text-muted-foreground'
                               }`}
                             >
                               {option}
-                              {optIndex === q.correctAnswer && ' ✓'}
-                              {optIndex === studentAnswer && optIndex !== q.correctAnswer && ' (Student)'}
+                              {optIndex === correctIndex && ' ✓'}
+                              {optIndex === studentAnswer && optIndex !== correctIndex && ' (Student)'}
                             </div>
                           ))}
+                        </div>
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                          <Label className="text-sm">Override: Mark as correct</Label>
+                          <Switch 
+                            checked={isCorrect}
+                            onCheckedChange={(checked) => handleOverrideToggle(q.id, checked)}
+                          />
                         </div>
                       </div>
                     );
@@ -197,27 +287,41 @@ const SubmissionReview = () => {
               <Card className="bg-card">
                 <CardHeader>
                   <CardTitle className="text-lg">Fill in the Blanks</CardTitle>
-                  <CardDescription>Fill Blank Score: {submission.fillBlankScore}</CardDescription>
+                  <CardDescription>Fill Blank Score: {calculatedFillBlankScore}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {fillBlankQuestions.map((q, index) => {
                     const studentAnswer = getAnswerForQuestion(q.id);
-                    const isCorrect = typeof studentAnswer === 'string' && 
-                      studentAnswer.toLowerCase().trim() === (q.correctAnswer as string).toLowerCase().trim();
+                    const autoCorrect = isFillBlankCorrect(q, studentAnswer);
+                    const hasOverride = manualOverrides[q.id] !== undefined;
+                    const isCorrect = hasOverride ? manualOverrides[q.id] : autoCorrect;
+                    const similarity = typeof studentAnswer === 'string' && q.correctAnswer 
+                      ? Math.round(calculateSimilarity(studentAnswer, q.correctAnswer as string) * 100) 
+                      : 0;
                     
                     return (
                       <div key={q.id} className="p-4 bg-accent rounded-lg">
                         <div className="flex items-start justify-between mb-2">
                           <p className="font-medium text-foreground">Q{index + 1}. {q.text}</p>
-                          {isCorrect ? (
-                            <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
-                          ) : (
-                            <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-                          )}
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">{similarity}% match</Badge>
+                            {isCorrect ? (
+                              <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
+                            ) : (
+                              <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+                            )}
+                          </div>
                         </div>
                         <div className="text-sm space-y-1">
                           <p><span className="text-muted-foreground">Student:</span> <span className={isCorrect ? 'text-chart-1' : 'text-destructive'}>{studentAnswer}</span></p>
                           <p><span className="text-muted-foreground">Correct:</span> <span className="text-chart-1">{q.correctAnswer}</span></p>
+                        </div>
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                          <Label className="text-sm">Override: Mark as correct</Label>
+                          <Switch 
+                            checked={isCorrect}
+                            onCheckedChange={(checked) => handleOverrideToggle(q.id, checked)}
+                          />
                         </div>
                       </div>
                     );
@@ -278,18 +382,20 @@ const SubmissionReview = () => {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Auto Score (MCQ + Fill)</span>
-                  <span className="font-medium">{submission.totalAutoScore}</span>
+                  <span className="text-muted-foreground">MCQ Score</span>
+                  <span className="font-medium">{calculatedMcqScore}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Manual Marks</span>
-                  <span className="font-medium">{Object.values(questionMarks).reduce((s, m) => s + (m || 0), 0)}</span>
+                  <span className="text-muted-foreground">Fill Blank Score</span>
+                  <span className="font-medium">{calculatedFillBlankScore}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Short Answer Marks</span>
+                  <span className="font-medium">{shortAnswerMarks}</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
                   <span className="font-medium">Total Score</span>
-                  <span className="font-bold text-primary">
-                    {submission.totalAutoScore + Object.values(questionMarks).reduce((s, m) => s + (m || 0), 0)}
-                  </span>
+                  <span className="font-bold text-primary">{totalScore}</span>
                 </div>
               </CardContent>
             </Card>
