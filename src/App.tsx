@@ -28,6 +28,7 @@ import QuestionBuilder from "./pages/teacher/QuestionBuilder";
 import SubmissionsList from "./pages/teacher/SubmissionsList";
 import SubmissionReview from "./pages/teacher/SubmissionReview";
 import ManageSubjects from "./pages/teacher/ManageSubjects";
+import ManageStudents from "./pages/teacher/ManageStudents";
 
 // Shared Pages
 import Settings from "./pages/Settings";
@@ -121,6 +122,11 @@ const App = () => (
             <Route path="/teacher/submission/:submissionId" element={
               <ProtectedRoute allowedRole="teacher">
                 <SubmissionReview />
+              </ProtectedRoute>
+            } />
+            <Route path="/teacher/students" element={
+              <ProtectedRoute allowedRole="teacher">
+                <ManageStudents />
               </ProtectedRoute>
             } />
             

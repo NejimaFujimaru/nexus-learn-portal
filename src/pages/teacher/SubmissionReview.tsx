@@ -20,7 +20,7 @@ const SubmissionReview = () => {
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [teacherRemarks, setTeacherRemarks] = useState('');
-  const [shortAnswerMarks, setShortAnswerMarks] = useState('');
+  const [questionMarks, setQuestionMarks] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,7 +31,9 @@ const SubmissionReview = () => {
         if (found) {
           setSubmission(found);
           setTeacherRemarks(found.teacherRemarks || '');
-          setShortAnswerMarks(found.shortAnswerMarks?.toString() || '0');
+          // Initialize question marks from saved data or default to 0
+          const savedMarks = found.questionMarks || {};
+          setQuestionMarks(savedMarks);
           const testQuestions = await dbOperations.getQuestionsByTest(found.testId);
           setQuestions(testQuestions);
         }
@@ -76,16 +78,25 @@ const SubmissionReview = () => {
 
   const handleApprove = async () => {
     try {
+      // Calculate total manual marks from all questions
+      const totalManualMarks = Object.values(questionMarks).reduce((sum, m) => sum + (m || 0), 0);
+      
       await dbOperations.updateSubmission(submission.id, {
         status: 'graded',
         teacherRemarks,
-        shortAnswerMarks: parseInt(shortAnswerMarks) || 0
+        questionMarks,
+        totalManualMarks,
+        finalScore: submission.totalAutoScore + totalManualMarks
       });
       toast({ title: "Submission graded successfully" });
       navigate('/teacher/submissions');
     } catch (error) {
       toast({ title: "Error updating submission", variant: "destructive" });
     }
+  };
+
+  const handleQuestionMarkChange = (questionId: string, marks: number) => {
+    setQuestionMarks(prev => ({ ...prev, [questionId]: marks }));
   };
 
   const getAnswerForQuestion = (questionId: string) => {
@@ -228,9 +239,24 @@ const SubmissionReview = () => {
                     
                     return (
                       <div key={q.id} className="p-4 bg-accent rounded-lg">
-                        <p className="font-medium text-foreground mb-2">Q{index + 1}. {q.text}</p>
-                        <div className="bg-card p-3 rounded border border-border">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="font-medium text-foreground">Q{index + 1}. {q.text}</p>
+                          <Badge variant="outline">{q.marks} marks</Badge>
+                        </div>
+                        <div className="bg-card p-3 rounded border border-border mb-3">
                           <p className="text-sm text-foreground">{studentAnswer || 'No answer provided'}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label className="text-sm">Award marks:</Label>
+                          <Input 
+                            type="number"
+                            min={0}
+                            max={q.marks}
+                            className="w-20"
+                            value={questionMarks[q.id] ?? 0}
+                            onChange={(e) => handleQuestionMarkChange(q.id, parseInt(e.target.value) || 0)}
+                          />
+                          <span className="text-sm text-muted-foreground">/ {q.marks}</span>
                         </div>
                       </div>
                     );
@@ -242,28 +268,31 @@ const SubmissionReview = () => {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Short Answer Marks */}
-            {shortAnswerQuestions.length > 0 && (
-              <Card className="bg-card">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Edit3 className="h-5 w-5" />
-                    Short Answer Marks
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Marks for Short Answers</Label>
-                    <Input 
-                      type="number" 
-                      value={shortAnswerMarks}
-                      onChange={(e) => setShortAnswerMarks(e.target.value)}
-                      min={0}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Grading Summary */}
+            <Card className="bg-card">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Edit3 className="h-5 w-5" />
+                  Grading Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Auto Score (MCQ + Fill)</span>
+                  <span className="font-medium">{submission.totalAutoScore}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Manual Marks</span>
+                  <span className="font-medium">{Object.values(questionMarks).reduce((s, m) => s + (m || 0), 0)}</span>
+                </div>
+                <div className="border-t pt-2 flex justify-between">
+                  <span className="font-medium">Total Score</span>
+                  <span className="font-bold text-primary">
+                    {submission.totalAutoScore + Object.values(questionMarks).reduce((s, m) => s + (m || 0), 0)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Teacher Remarks */}
             <Card className="bg-card">

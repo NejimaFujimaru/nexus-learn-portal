@@ -79,6 +79,10 @@ const TeacherDashboard = () => {
             <Eye className="h-5 w-5 mr-2" />
             View Submissions
           </Button>
+          <Button size="lg" variant="outline" onClick={() => navigate('/teacher/students')}>
+            <Users className="h-5 w-5 mr-2" />
+            Manage Students
+          </Button>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6">
