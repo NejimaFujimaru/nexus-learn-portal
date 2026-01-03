@@ -12,10 +12,12 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { dbOperations, Test, Question } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
 
 const TestInterface = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [test, setTest] = useState<Test | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -66,8 +68,8 @@ const TestInterface = () => {
     try {
       await dbOperations.addSubmission({
         testId: test.id,
-        studentId: 'demo-student',
-        studentName: 'Alex Thompson',
+        studentId: user?.uid || 'unknown',
+        studentName: user?.displayName || user?.email?.split('@')[0] || 'Student',
         answers: answerArray,
         mcqScore, fillBlankScore,
         totalAutoScore: mcqScore + fillBlankScore,

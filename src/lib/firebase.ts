@@ -162,6 +162,9 @@ export interface Submission {
   fillBlankScore: number;
   totalAutoScore: number;
   shortAnswerMarks?: number;
+  questionMarks?: Record<string, number>;
+  totalManualMarks?: number;
+  finalScore?: number;
   status: 'pending' | 'graded';
   submittedAt: string;
   teacherRemarks?: string;
