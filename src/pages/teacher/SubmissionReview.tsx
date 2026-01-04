@@ -105,10 +105,48 @@ const SubmissionReview = () => {
     );
   }
 
+  const normalizeMcqIndex = (
+    correctAnswer: Question["correctAnswer"],
+    options?: string[]
+  ): number | null => {
+    if (typeof correctAnswer === 'number' && Number.isFinite(correctAnswer)) return correctAnswer;
+    if (typeof correctAnswer !== 'string') return null;
+
+    const v = correctAnswer.trim();
+
+    // Stored by TestCreationWizard as "option0", "option1", ...
+    const optionMatch = /^option(\d+)$/.exec(v);
+    if (optionMatch) return Number(optionMatch[1]);
+
+    // Stored as numeric string
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+
+    // Stored as option text
+    if (options?.length) {
+      const idx = options.findIndex(
+        (o) => o?.trim().toLowerCase() === v.toLowerCase()
+      );
+      if (idx >= 0) return idx;
+    }
+
+    return null;
+  };
+
+  const normalizeStudentMcqIndex = (studentAnswer: string | number | undefined): number | null => {
+    if (typeof studentAnswer === 'number' && Number.isFinite(studentAnswer)) return studentAnswer;
+    if (typeof studentAnswer === 'string') {
+      const n = Number(studentAnswer);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  };
+
   // Helper to check if MCQ is correct
   const isMcqCorrect = (q: Question, studentAnswer: string | number | undefined): boolean => {
-    const correctIndex = typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer) : q.correctAnswer;
-    return studentAnswer === correctIndex;
+    const studentIndex = normalizeStudentMcqIndex(studentAnswer);
+    const correctIndex = normalizeMcqIndex(q.correctAnswer, q.options);
+    return studentIndex !== null && correctIndex !== null && studentIndex === correctIndex;
   };
 
   // Helper to check if fill-in-blank is correct (65% similarity)
@@ -233,11 +271,13 @@ const SubmissionReview = () => {
                 <CardContent className="space-y-4">
                   {mcqQuestions.map((q, index) => {
                     const studentAnswer = getAnswerForQuestion(q.id);
+                    const studentIndex = normalizeStudentMcqIndex(studentAnswer);
+                    const correctIndex = normalizeMcqIndex(q.correctAnswer, q.options);
+
                     const autoCorrect = isMcqCorrect(q, studentAnswer);
                     const hasOverride = manualOverrides[q.id] !== undefined;
                     const isCorrect = hasOverride ? manualOverrides[q.id] : autoCorrect;
-                    const correctIndex = typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer) : q.correctAnswer;
-                    
+
                     return (
                       <div key={q.id} className={`p-4 rounded-lg border-2 transition-all ${
                         isCorrect 
@@ -266,10 +306,10 @@ const SubmissionReview = () => {
                         </div>
                         <div className="space-y-2 text-sm">
                           {q.options?.map((option, optIndex) => {
-                            const isCorrectOption = optIndex === correctIndex;
-                            const isStudentAnswer = optIndex === studentAnswer;
+                            const isCorrectOption = correctIndex !== null && optIndex === correctIndex;
+                            const isStudentAnswer = studentIndex !== null && optIndex === studentIndex;
                             const isWrongStudentAnswer = isStudentAnswer && !isCorrectOption;
-                            
+
                             return (
                               <div 
                                 key={optIndex}
