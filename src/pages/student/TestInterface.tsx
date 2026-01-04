@@ -79,21 +79,52 @@ const TestInterface = () => {
     return 1 - matrix[s1.length][s2.length] / maxLen;
   };
 
+  const normalizeMcqIndex = (
+    correctAnswer: Question["correctAnswer"],
+    options?: string[]
+  ): number | null => {
+    if (typeof correctAnswer === 'number' && Number.isFinite(correctAnswer)) return correctAnswer;
+    if (typeof correctAnswer !== 'string') return null;
+
+    const v = correctAnswer.trim();
+
+    // Stored by TestCreationWizard as "option0", "option1", ...
+    const optionMatch = /^option(\d+)$/.exec(v);
+    if (optionMatch) return Number(optionMatch[1]);
+
+    // Stored as numeric string
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+
+    // Stored as option text
+    if (options?.length) {
+      const idx = options.findIndex(
+        (o) => o?.trim().toLowerCase() === v.toLowerCase()
+      );
+      if (idx >= 0) return idx;
+    }
+
+    return null;
+  };
+
   const handleSubmit = async () => {
     if (!test) return;
     let mcqScore = 0, fillBlankScore = 0;
     const answerArray = Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer }));
-    
+
     questions.forEach(q => {
       const studentAnswer = answers[q.id];
-      // MCQ: convert both to numbers for comparison
+
+      // MCQ: compare indices, supporting stored values like "option2" as well as numbers
       if (q.type === 'mcq' && studentAnswer !== undefined) {
-        const studentIndex = typeof studentAnswer === 'string' ? parseInt(studentAnswer, 10) : studentAnswer;
-        const correctIndex = typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer, 10) : q.correctAnswer;
-        if (!isNaN(studentIndex as number) && !isNaN(correctIndex as number) && studentIndex === correctIndex) {
+        const studentIndex = typeof studentAnswer === 'string' ? Number(studentAnswer) : studentAnswer;
+        const correctIndex = normalizeMcqIndex(q.correctAnswer, q.options);
+
+        if (Number.isFinite(studentIndex) && correctIndex !== null && studentIndex === correctIndex) {
           mcqScore += q.marks;
         }
       }
+
       // Fill in blank: 65% similarity threshold
       if (q.type === 'fillBlank' && typeof studentAnswer === 'string' && q.correctAnswer) {
         const similarity = calculateSimilarity(studentAnswer, String(q.correctAnswer));
