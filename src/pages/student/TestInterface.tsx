@@ -86,14 +86,17 @@ const TestInterface = () => {
     
     questions.forEach(q => {
       const studentAnswer = answers[q.id];
-      // MCQ: compare as numbers (convert correctAnswer string to number)
-      if (q.type === 'mcq') {
-        const correctIndex = typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer) : q.correctAnswer;
-        if (studentAnswer === correctIndex) mcqScore += q.marks;
+      // MCQ: convert both to numbers for comparison
+      if (q.type === 'mcq' && studentAnswer !== undefined) {
+        const studentIndex = typeof studentAnswer === 'string' ? parseInt(studentAnswer, 10) : studentAnswer;
+        const correctIndex = typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer, 10) : q.correctAnswer;
+        if (!isNaN(studentIndex as number) && !isNaN(correctIndex as number) && studentIndex === correctIndex) {
+          mcqScore += q.marks;
+        }
       }
       // Fill in blank: 65% similarity threshold
       if (q.type === 'fillBlank' && typeof studentAnswer === 'string' && q.correctAnswer) {
-        const similarity = calculateSimilarity(studentAnswer, q.correctAnswer as string);
+        const similarity = calculateSimilarity(studentAnswer, String(q.correctAnswer));
         if (similarity >= 0.65) fillBlankScore += q.marks;
       }
     });
