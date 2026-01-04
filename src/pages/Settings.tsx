@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, User, Settings as SettingsIcon, Shield, Moon, Sun, Bell, Globe, Lock, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, User, Settings as SettingsIcon, Shield, Moon, Sun, Bell, Globe, Lock, AlertTriangle, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,21 +8,53 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useTheme } from 'next-themes';
+import { updateProfile } from 'firebase/auth';
+import { ref, update } from 'firebase/database';
+import { database } from '@/lib/firebase';
+import { toast } from '@/hooks/use-toast';
 
 const Settings = () => {
   const { user, role } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const [displayName, setDisplayName] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [language, setLanguage] = useState('en');
+  const [notifications, setNotifications] = useState(true);
+  
   const userName = user?.displayName || user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || '';
   const userInitials = userName.slice(0, 2).toUpperCase();
 
-  const [theme, setTheme] = useState('system');
-  const [language, setLanguage] = useState('en');
-  const [notifications, setNotifications] = useState(true);
+  useEffect(() => {
+    setDisplayName(userName);
+  }, [userName]);
 
   const backPath = role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
+
+  const handleSaveName = async () => {
+    if (!user || !displayName.trim()) return;
+    
+    setIsSavingName(true);
+    try {
+      await updateProfile(user, { displayName: displayName.trim() });
+      await update(ref(database, `users/${user.uid}`), { displayName: displayName.trim() });
+      toast({ title: "Name updated successfully" });
+      setIsEditingName(false);
+    } catch (error) {
+      toast({ title: "Failed to update name", variant: "destructive" });
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
+  const handleThemeChange = (value: string) => {
+    setTheme(value);
+    toast({ title: `Theme changed to ${value}` });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -99,16 +131,45 @@ const Settings = () => {
               <div className="space-y-2">
                 <Label htmlFor="name">Display Name</Label>
                 <div className="flex gap-2">
-                  <Input id="name" value={userName} disabled className="flex-1" />
-                  <Button variant="outline" disabled>Edit</Button>
+                  <Input 
+                    id="name" 
+                    value={displayName} 
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    disabled={!isEditingName}
+                    className="flex-1" 
+                  />
+                  {isEditingName ? (
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          setDisplayName(userName);
+                          setIsEditingName(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button onClick={handleSaveName} disabled={isSavingName}>
+                        {isSavingName ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" onClick={() => setIsEditingName(true)}>
+                      Edit
+                    </Button>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">Name editing coming soon</p>
               </div>
 
               {/* Email */}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" value={userEmail} disabled />
+                <p className="text-xs text-muted-foreground">Email cannot be changed</p>
               </div>
 
               {/* Role */}
@@ -142,7 +203,7 @@ const Settings = () => {
                     <p className="text-sm text-muted-foreground">Select your preferred theme</p>
                   </div>
                 </div>
-                <Select value={theme} onValueChange={setTheme}>
+                <Select value={theme} onValueChange={handleThemeChange}>
                   <SelectTrigger className="w-32">
                     <SelectValue />
                   </SelectTrigger>
@@ -213,16 +274,9 @@ const Settings = () => {
                     <p className="text-sm text-muted-foreground">Update your password</p>
                   </div>
                 </div>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" disabled>
-                      Change Password
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Coming soon</p>
-                  </TooltipContent>
-                </Tooltip>
+                <Button variant="outline" disabled>
+                  Change Password (Coming Soon)
+                </Button>
               </div>
 
               <Separator />

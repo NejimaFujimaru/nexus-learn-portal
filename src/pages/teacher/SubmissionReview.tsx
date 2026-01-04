@@ -239,37 +239,72 @@ const SubmissionReview = () => {
                     const correctIndex = typeof q.correctAnswer === 'string' ? parseInt(q.correctAnswer) : q.correctAnswer;
                     
                     return (
-                      <div key={q.id} className="p-4 bg-accent rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
+                      <div key={q.id} className={`p-4 rounded-lg border-2 transition-all ${
+                        isCorrect 
+                          ? 'bg-emerald-500/10 border-emerald-500/30' 
+                          : 'bg-destructive/10 border-destructive/30'
+                      }`}>
+                        <div className="flex items-start justify-between mb-3">
                           <p className="font-medium text-foreground">Q{index + 1}. {q.text}</p>
-                          <div className="flex items-center gap-2">
+                          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                            isCorrect 
+                              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+                              : 'bg-destructive/20 text-destructive'
+                          }`}>
                             {isCorrect ? (
-                              <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
+                              <>
+                                <CheckCircle2 className="h-4 w-4" />
+                                Correct
+                              </>
                             ) : (
-                              <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+                              <>
+                                <XCircle className="h-4 w-4" />
+                                Incorrect
+                              </>
                             )}
                           </div>
                         </div>
-                        <div className="space-y-1 text-sm">
-                          {q.options?.map((option, optIndex) => (
-                            <div 
-                              key={optIndex}
-                              className={`p-2 rounded ${
-                                optIndex === correctIndex 
-                                  ? 'bg-chart-1/20 text-chart-1' 
-                                  : optIndex === studentAnswer && !autoCorrect
-                                  ? 'bg-destructive/20 text-destructive'
-                                  : 'text-muted-foreground'
-                              }`}
-                            >
-                              {option}
-                              {optIndex === correctIndex && ' ✓'}
-                              {optIndex === studentAnswer && optIndex !== correctIndex && ' (Student)'}
-                            </div>
-                          ))}
+                        <div className="space-y-2 text-sm">
+                          {q.options?.map((option, optIndex) => {
+                            const isCorrectOption = optIndex === correctIndex;
+                            const isStudentAnswer = optIndex === studentAnswer;
+                            const isWrongStudentAnswer = isStudentAnswer && !isCorrectOption;
+                            
+                            return (
+                              <div 
+                                key={optIndex}
+                                className={`p-3 rounded-lg flex items-center justify-between transition-all ${
+                                  isCorrectOption 
+                                    ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 font-medium' 
+                                    : isWrongStudentAnswer
+                                    ? 'bg-destructive/20 text-destructive border border-destructive/40'
+                                    : 'bg-muted/50 text-muted-foreground'
+                                }`}
+                              >
+                                <span>{option}</span>
+                                <div className="flex items-center gap-2">
+                                  {isCorrectOption && (
+                                    <span className="flex items-center gap-1 text-xs bg-emerald-500/30 px-2 py-0.5 rounded-full">
+                                      <CheckCircle2 className="h-3 w-3" /> Correct Answer
+                                    </span>
+                                  )}
+                                  {isWrongStudentAnswer && (
+                                    <span className="flex items-center gap-1 text-xs bg-destructive/30 px-2 py-0.5 rounded-full">
+                                      <XCircle className="h-3 w-3" /> Student's Answer
+                                    </span>
+                                  )}
+                                  {isStudentAnswer && isCorrectOption && (
+                                    <span className="flex items-center gap-1 text-xs bg-emerald-500/30 px-2 py-0.5 rounded-full">
+                                      <CheckCircle2 className="h-3 w-3" /> Student's Answer
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-                          <Label className="text-sm">Override: Mark as correct</Label>
+                        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+                          <Label className="text-sm text-muted-foreground">Override: Mark as correct</Label>
                           <Switch 
                             checked={isCorrect}
                             onCheckedChange={(checked) => handleOverrideToggle(q.id, checked)}
@@ -300,24 +335,50 @@ const SubmissionReview = () => {
                       : 0;
                     
                     return (
-                      <div key={q.id} className="p-4 bg-accent rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
+                      <div key={q.id} className={`p-4 rounded-lg border-2 transition-all ${
+                        isCorrect 
+                          ? 'bg-emerald-500/10 border-emerald-500/30' 
+                          : 'bg-destructive/10 border-destructive/30'
+                      }`}>
+                        <div className="flex items-start justify-between mb-3">
                           <p className="font-medium text-foreground">Q{index + 1}. {q.text}</p>
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">{similarity}% match</Badge>
-                            {isCorrect ? (
-                              <CheckCircle2 className="h-5 w-5 text-chart-1 flex-shrink-0" />
-                            ) : (
-                              <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-                            )}
+                            <Badge variant="outline" className={`text-xs ${
+                              similarity >= 65 ? 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400' : 'border-destructive/50 text-destructive'
+                            }`}>
+                              {similarity}% match
+                            </Badge>
+                            <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                              isCorrect 
+                                ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+                                : 'bg-destructive/20 text-destructive'
+                            }`}>
+                              {isCorrect ? (
+                                <><CheckCircle2 className="h-3 w-3" /> Correct</>
+                              ) : (
+                                <><XCircle className="h-3 w-3" /> Incorrect</>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="text-sm space-y-1">
-                          <p><span className="text-muted-foreground">Student:</span> <span className={isCorrect ? 'text-chart-1' : 'text-destructive'}>{studentAnswer}</span></p>
-                          <p><span className="text-muted-foreground">Correct:</span> <span className="text-chart-1">{q.correctAnswer}</span></p>
+                        <div className="space-y-2">
+                          <div className={`p-3 rounded-lg border ${
+                            isCorrect 
+                              ? 'bg-emerald-500/10 border-emerald-500/30' 
+                              : 'bg-destructive/10 border-destructive/30'
+                          }`}>
+                            <p className="text-xs text-muted-foreground mb-1">Student's Answer</p>
+                            <p className={`font-medium ${isCorrect ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                              {studentAnswer || 'No answer provided'}
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                            <p className="text-xs text-muted-foreground mb-1">Correct Answer</p>
+                            <p className="font-medium text-emerald-600 dark:text-emerald-400">{q.correctAnswer}</p>
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-                          <Label className="text-sm">Override: Mark as correct</Label>
+                        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+                          <Label className="text-sm text-muted-foreground">Override: Mark as correct</Label>
                           <Switch 
                             checked={isCorrect}
                             onCheckedChange={(checked) => handleOverrideToggle(q.id, checked)}
