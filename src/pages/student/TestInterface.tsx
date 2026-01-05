@@ -217,6 +217,11 @@ const TestInterface = () => {
                     onChange={(e) => setAnswers({...answers, [q.id]: e.target.value})} />
                 )}
 
+                {q.type === 'longAnswer' && (
+                  <Textarea placeholder="Write your detailed answer..." rows={10} value={answers[q.id] as string || ''} 
+                    onChange={(e) => setAnswers({...answers, [q.id]: e.target.value})} />
+                )}
+
                 <div className="flex justify-between pt-4 border-t">
                   <Button variant="outline" onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))} disabled={currentQuestion === 0}>
                     <ChevronLeft className="h-4 w-4 mr-1" />Previous

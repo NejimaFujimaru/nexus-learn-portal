@@ -60,7 +60,8 @@ const TestResult = () => {
     );
   }
 
-  const totalScore = submission.totalAutoScore || 0;
+  // Use finalScore if available (graded by teacher), otherwise use totalAutoScore
+  const totalScore = submission.finalScore ?? submission.totalAutoScore ?? 0;
   const totalMarks = test.totalMarks || 100;
   const percentage = Math.round((totalScore / totalMarks) * 100);
 
@@ -126,7 +127,7 @@ const TestResult = () => {
                 Section Breakdown
               </h3>
               <div className="space-y-4">
-                {submission.mcqScore !== undefined && (
+                {(submission.mcqScore !== undefined && submission.mcqScore > 0) && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-foreground font-medium">MCQ</span>
@@ -135,13 +136,31 @@ const TestResult = () => {
                     <Progress value={(submission.mcqScore / totalMarks) * 100} className="h-2" />
                   </div>
                 )}
-                {submission.fillBlankScore !== undefined && (
+                {(submission.fillBlankScore !== undefined && submission.fillBlankScore > 0) && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-foreground font-medium">Fill in the Blanks</span>
                       <span className="text-muted-foreground">{submission.fillBlankScore} marks</span>
                     </div>
                     <Progress value={(submission.fillBlankScore / totalMarks) * 100} className="h-2" />
+                  </div>
+                )}
+                {(submission.shortAnswerMarks !== undefined && submission.shortAnswerMarks > 0) && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-foreground font-medium">Short Answer</span>
+                      <span className="text-muted-foreground">{submission.shortAnswerMarks} marks</span>
+                    </div>
+                    <Progress value={(submission.shortAnswerMarks / totalMarks) * 100} className="h-2" />
+                  </div>
+                )}
+                {(submission.longAnswerMarks !== undefined && submission.longAnswerMarks > 0) && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-foreground font-medium">Long Answer</span>
+                      <span className="text-muted-foreground">{submission.longAnswerMarks} marks</span>
+                    </div>
+                    <Progress value={(submission.longAnswerMarks / totalMarks) * 100} className="h-2" />
                   </div>
                 )}
               </div>
