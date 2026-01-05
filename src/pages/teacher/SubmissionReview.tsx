@@ -244,19 +244,19 @@ const SubmissionReview = () => {
         </Link>
 
         {/* Submission Header */}
-        <Card className="bg-card mb-6">
-          <CardHeader>
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <Card className="bg-card mb-4 sm:mb-6">
+          <CardHeader className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
               <div>
-                <CardTitle className="text-2xl">{submission.studentName}</CardTitle>
-                <CardDescription>Submitted: {new Date(submission.submittedAt).toLocaleString()}</CardDescription>
+                <CardTitle className="text-lg sm:text-2xl">{submission.studentName}</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">Submitted: {new Date(submission.submittedAt).toLocaleString()}</CardDescription>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 sm:gap-4">
                 <div className="text-center">
-                  <span className="text-3xl font-bold text-primary">{totalScore}</span>
+                  <span className="text-2xl sm:text-3xl font-bold text-primary">{totalScore}</span>
                   <p className="text-xs text-muted-foreground">Total Score</p>
                 </div>
-                <Badge className={submission.status === 'graded' ? 'bg-chart-1/20 text-chart-1' : 'bg-chart-3/20 text-chart-3'}>
+                <Badge className={`text-xs sm:text-sm ${submission.status === 'graded' ? 'bg-chart-1/20 text-chart-1' : 'bg-chart-3/20 text-chart-3'}`}>
                   {submission.status === 'graded' ? 'Graded' : 'Pending'}
                 </Badge>
               </div>
@@ -264,9 +264,9 @@ const SubmissionReview = () => {
           </CardHeader>
         </Card>
 
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Student Answers */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6 order-2 lg:order-1">
             {/* MCQ Section */}
             {mcqQuestions.length > 0 && (
               <Card className="bg-card">
@@ -517,7 +517,7 @@ const SubmissionReview = () => {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6 order-1 lg:order-2">
             {/* Grading Summary */}
             <Card className="bg-card">
               <CardHeader>

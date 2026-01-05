@@ -66,52 +66,53 @@ const TeacherDashboard = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-wrap gap-4 mb-8">
-          <Button size="lg" onClick={() => navigate('/teacher/subjects')}>
-            <BookOpen className="h-5 w-5 mr-2" />
-            Manage Subjects
+        <div className="flex flex-wrap gap-2 sm:gap-4 mb-6 sm:mb-8">
+          <Button size="sm" className="text-xs sm:text-sm h-9 sm:h-10" onClick={() => navigate('/teacher/subjects')}>
+            <BookOpen className="h-4 w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Manage</span> Subjects
           </Button>
-          <Button size="lg" onClick={() => navigate('/teacher/create-test')}>
-            <Plus className="h-5 w-5 mr-2" />
-            Create Test
+          <Button size="sm" className="text-xs sm:text-sm h-9 sm:h-10" onClick={() => navigate('/teacher/create-test')}>
+            <Plus className="h-4 w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Create</span> Test
           </Button>
-          <Button size="lg" variant="outline" onClick={() => navigate('/teacher/submissions')}>
-            <Eye className="h-5 w-5 mr-2" />
-            View Submissions
+          <Button size="sm" variant="outline" className="text-xs sm:text-sm h-9 sm:h-10" onClick={() => navigate('/teacher/submissions')}>
+            <Eye className="h-4 w-4 mr-1 sm:mr-2" />
+            Submissions
           </Button>
-          <Button size="lg" variant="outline" onClick={() => navigate('/teacher/students')}>
-            <Users className="h-5 w-5 mr-2" />
-            Manage Students
+          <Button size="sm" variant="outline" className="text-xs sm:text-sm h-9 sm:h-10" onClick={() => navigate('/teacher/students')}>
+            <Users className="h-4 w-4 mr-1 sm:mr-2" />
+            Students
           </Button>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Pending Submissions */}
           <Card className="bg-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <ClipboardList className="h-5 w-5 text-chart-3" />
                 Pending Submissions
               </CardTitle>
-              <CardDescription>Submissions awaiting your review</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Submissions awaiting your review</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
               {pendingSubmissions.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {pendingSubmissions.slice(0, 4).map((submission) => (
                     <div 
                       key={submission.id} 
-                      className="flex items-center justify-between p-3 bg-accent rounded-lg"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 p-3 bg-accent rounded-lg"
                     >
                       <div>
-                        <p className="font-medium text-foreground">{submission.studentName}</p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="font-medium text-sm sm:text-base text-foreground">{submission.studentName}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                           Score: {submission.totalAutoScore} (auto-graded)
                         </p>
                       </div>
                       <Button 
                         size="sm" 
                         variant="outline"
+                        className="w-full sm:w-auto text-xs sm:text-sm"
                         onClick={() => navigate(`/teacher/submission/${submission.id}`)}
                       >
                         Review
@@ -120,9 +121,9 @@ const TeacherDashboard = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No pending submissions</p>
+                <div className="text-center py-6 sm:py-8 text-muted-foreground">
+                  <ClipboardList className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-sm">No pending submissions</p>
                 </div>
               )}
             </CardContent>
@@ -130,23 +131,23 @@ const TeacherDashboard = () => {
 
           {/* Recent Tests */}
           <Card className="bg-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <FileText className="h-5 w-5 text-primary" />
                 Recent Tests
               </CardTitle>
-              <CardDescription>Your recently created assessments</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Your recently created assessments</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
               {tests.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {tests.slice(0, 4).map((test) => (
                     <div 
                       key={test.id} 
-                      className="flex items-center justify-between p-3 bg-accent rounded-lg"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-accent rounded-lg"
                     >
                       <div>
-                        <p className="font-medium text-foreground">{test.title}</p>
+                        <p className="font-medium text-sm sm:text-base text-foreground">{test.title}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant="outline" className="text-xs">{test.type}</Badge>
                           <span className="text-xs text-muted-foreground">{test.duration} min</span>
@@ -154,10 +155,10 @@ const TeacherDashboard = () => {
                       </div>
                       <Badge 
                         variant="secondary"
-                        className={test.published 
+                        className={`text-xs w-fit ${test.published 
                           ? 'bg-chart-1/20 text-chart-1' 
                           : 'bg-chart-3/20 text-chart-3'
-                        }
+                        }`}
                       >
                         {test.published ? 'Published' : 'Draft'}
                       </Badge>
@@ -165,14 +166,14 @@ const TeacherDashboard = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No tests created yet</p>
+                <div className="text-center py-6 sm:py-8 text-muted-foreground">
+                  <FileText className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-sm">No tests created yet</p>
                 </div>
               )}
               <Button 
                 variant="outline" 
-                className="w-full mt-4"
+                className="w-full mt-4 text-sm"
                 onClick={() => navigate('/teacher/create-test')}
               >
                 <Plus className="h-4 w-4 mr-2" />

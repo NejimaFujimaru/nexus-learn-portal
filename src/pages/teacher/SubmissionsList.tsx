@@ -52,40 +52,46 @@ const SubmissionsList = () => {
   };
 
   const SubmissionTable = ({ data }: { data: Submission[] }) => (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Student Name</TableHead>
-            <TableHead>Submitted</TableHead>
-            <TableHead>Auto Score</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Action</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.map((submission) => (
-            <TableRow key={submission.id}>
-              <TableCell className="font-medium">{submission.studentName}</TableCell>
-              <TableCell>{formatDate(submission.submittedAt)}</TableCell>
-              <TableCell>
-                <span className="font-semibold">{submission.totalAutoScore}</span>
-              </TableCell>
-              <TableCell>{getStatusBadge(submission.status)}</TableCell>
-              <TableCell className="text-right">
-                <Button 
-                  size="sm" 
-                  variant={submission.status === 'pending' ? 'default' : 'outline'}
-                  onClick={() => navigate(`/teacher/submission/${submission.id}`)}
-                >
-                  <Eye className="h-4 w-4 mr-1" />
-                  {submission.status === 'pending' ? 'Review' : 'View'}
-                </Button>
-              </TableCell>
+    <div className="overflow-x-auto -mx-4 sm:mx-0">
+      <div className="inline-block min-w-full align-middle">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs sm:text-sm">Student Name</TableHead>
+              <TableHead className="text-xs sm:text-sm hidden sm:table-cell">Submitted</TableHead>
+              <TableHead className="text-xs sm:text-sm">Score</TableHead>
+              <TableHead className="text-xs sm:text-sm hidden md:table-cell">Status</TableHead>
+              <TableHead className="text-right text-xs sm:text-sm">Action</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {data.map((submission) => (
+              <TableRow key={submission.id}>
+                <TableCell className="font-medium text-xs sm:text-sm p-2 sm:p-4">
+                  <div>{submission.studentName}</div>
+                  <div className="text-xs text-muted-foreground sm:hidden">{formatDate(submission.submittedAt)}</div>
+                </TableCell>
+                <TableCell className="text-xs sm:text-sm hidden sm:table-cell">{formatDate(submission.submittedAt)}</TableCell>
+                <TableCell className="p-2 sm:p-4">
+                  <span className="font-semibold text-xs sm:text-sm">{submission.totalAutoScore}</span>
+                </TableCell>
+                <TableCell className="hidden md:table-cell">{getStatusBadge(submission.status)}</TableCell>
+                <TableCell className="text-right p-2 sm:p-4">
+                  <Button 
+                    size="sm" 
+                    variant={submission.status === 'pending' ? 'default' : 'outline'}
+                    onClick={() => navigate(`/teacher/submission/${submission.id}`)}
+                    className="text-xs sm:text-sm h-8 px-2 sm:px-3"
+                  >
+                    <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    <span className="hidden sm:inline">{submission.status === 'pending' ? 'Review' : 'View'}</span>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 
@@ -108,29 +114,29 @@ const SubmissionsList = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <Card className="bg-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-chart-3/20">
-                  <Clock className="h-5 w-5 text-chart-3" />
+            <CardContent className="pt-4 sm:pt-6 p-3 sm:p-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-chart-3/20">
+                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-chart-3" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-card-foreground">{pendingSubmissions.length}</p>
-                  <p className="text-sm text-muted-foreground">Pending Review</p>
+                  <p className="text-xl sm:text-2xl font-bold text-card-foreground">{pendingSubmissions.length}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Pending Review</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="bg-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-chart-1/20">
-                  <CheckCircle2 className="h-5 w-5 text-chart-1" />
+            <CardContent className="pt-4 sm:pt-6 p-3 sm:p-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-chart-1/20">
+                  <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-chart-1" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-card-foreground">{gradedSubmissions.length}</p>
-                  <p className="text-sm text-muted-foreground">Graded</p>
+                  <p className="text-xl sm:text-2xl font-bold text-card-foreground">{gradedSubmissions.length}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Graded</p>
                 </div>
               </div>
             </CardContent>
@@ -139,20 +145,20 @@ const SubmissionsList = () => {
 
         {/* Tabs */}
         <Card className="bg-card">
-          <CardHeader>
-            <CardTitle>All Submissions</CardTitle>
-            <CardDescription>Click on a submission to review student answers</CardDescription>
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">All Submissions</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Click on a submission to review student answers</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
             <Tabs defaultValue="pending">
-              <TabsList className="mb-4">
-                <TabsTrigger value="pending">
+              <TabsList className="mb-3 sm:mb-4 flex flex-wrap h-auto gap-1">
+                <TabsTrigger value="pending" className="text-xs sm:text-sm px-2 sm:px-3">
                   Pending ({pendingSubmissions.length})
                 </TabsTrigger>
-                <TabsTrigger value="graded">
+                <TabsTrigger value="graded" className="text-xs sm:text-sm px-2 sm:px-3">
                   Graded ({gradedSubmissions.length})
                 </TabsTrigger>
-                <TabsTrigger value="all">
+                <TabsTrigger value="all" className="text-xs sm:text-sm px-2 sm:px-3">
                   All ({submissions.length})
                 </TabsTrigger>
               </TabsList>
