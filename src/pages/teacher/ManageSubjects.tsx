@@ -107,22 +107,23 @@ const ManageSubjects = () => {
         </div>
 
         {/* Add New Subject */}
-        <Card className="bg-card mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <Card className="bg-card mb-4 sm:mb-6">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Plus className="h-5 w-5" />
               Add New Subject
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <Input
                 placeholder="Enter subject name..."
                 value={newSubjectName}
                 onChange={(e) => setNewSubjectName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleAddSubject()}
+                className="flex-1"
               />
-              <Button onClick={handleAddSubject}>
+              <Button onClick={handleAddSubject} size="sm" className="w-full sm:w-auto">
                 <Plus className="h-4 w-4 mr-2" />
                 Add
               </Button>
@@ -132,47 +133,48 @@ const ManageSubjects = () => {
 
         {/* Subjects List */}
         <Card className="bg-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
               <BookOpen className="h-5 w-5" />
               Subjects ({subjects.length})
             </CardTitle>
-            <CardDescription>Manage your subjects and their chapters</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Manage your subjects and their chapters</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              <div className="text-center py-6 sm:py-8 text-muted-foreground text-sm">Loading...</div>
             ) : subjects.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
                 No subjects yet. Add your first subject above.
               </div>
             ) : (
-              <Accordion type="single" collapsible className="space-y-4">
+              <Accordion type="single" collapsible className="space-y-3 sm:space-y-4">
                 {subjects.map((subject) => (
-                  <AccordionItem key={subject.id} value={subject.id} className="border rounded-lg px-4">
-                    <AccordionTrigger className="hover:no-underline">
-                      <div className="flex items-center justify-between w-full pr-4">
+                  <AccordionItem key={subject.id} value={subject.id} className="border rounded-lg px-3 sm:px-4">
+                    <AccordionTrigger className="hover:no-underline py-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full pr-2 sm:pr-4 gap-2">
                         {editingSubject === subject.id ? (
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <Input
                               value={editSubjectName}
                               onChange={(e) => setEditSubjectName(e.target.value)}
-                              className="w-48"
+                              className="w-32 sm:w-48 text-sm"
                             />
-                            <Button size="sm" onClick={() => handleUpdateSubject(subject.id)}>
+                            <Button size="sm" onClick={() => handleUpdateSubject(subject.id)} className="h-8 w-8 p-0">
                               <Save className="h-4 w-4" />
                             </Button>
-                            <Button size="sm" variant="outline" onClick={() => setEditingSubject(null)}>
+                            <Button size="sm" variant="outline" onClick={() => setEditingSubject(null)} className="h-8 w-8 p-0">
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
                         ) : (
-                          <span className="font-medium">{subject.name}</span>
+                          <span className="font-medium text-sm sm:text-base">{subject.name}</span>
                         )}
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1 sm:gap-2" onClick={(e) => e.stopPropagation()}>
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="h-8 w-8 p-0"
                             onClick={() => {
                               setEditingSubject(subject.id);
                               setEditSubjectName(subject.name);
@@ -183,7 +185,7 @@ const ManageSubjects = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-destructive"
+                            className="text-destructive h-8 w-8 p-0"
                             onClick={() => handleDeleteSubject(subject.id)}
                           >
                             <Trash2 className="h-4 w-4" />

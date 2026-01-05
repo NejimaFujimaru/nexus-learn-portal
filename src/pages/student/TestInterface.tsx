@@ -170,38 +170,38 @@ const TestInterface = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="fixed top-0 left-0 right-0 bg-card border-b border-border z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="font-semibold text-foreground">{test.title}</h1>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-semibold text-foreground text-sm sm:text-base truncate">{test.title}</h1>
           </div>
-          <div className={cn("flex items-center gap-2 px-4 py-2 rounded-lg font-mono", 
+          <div className={cn("flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-mono text-sm sm:text-base flex-shrink-0", 
             timeLeft < 300 ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>
-            <Clock className="h-5 w-5" />{formatTime(timeLeft)}
+            <Clock className="h-4 w-4 sm:h-5 sm:w-5" />{formatTime(timeLeft)}
           </div>
         </div>
         <Progress value={progress} className="h-1 rounded-none" />
       </header>
 
-      <div className="pt-24 pb-24 px-4">
+      <div className="pt-20 sm:pt-24 pb-20 sm:pb-24 px-3 sm:px-4">
         <div className="max-w-3xl mx-auto">
           {q && (
             <Card className="bg-card">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <Badge variant="secondary">{q.type.toUpperCase()}</Badge>
-                  <span className="text-sm text-muted-foreground">Q {currentQuestion + 1} / {questions.length}</span>
+              <CardHeader className="p-3 sm:p-6">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge variant="secondary" className="text-xs">{q.type.toUpperCase()}</Badge>
+                  <span className="text-xs sm:text-sm text-muted-foreground">Q {currentQuestion + 1} / {questions.length}</span>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <p className="text-lg font-medium text-foreground">{q.text}</p>
+              <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0 space-y-4 sm:space-y-6">
+                <p className="text-base sm:text-lg font-medium text-foreground">{q.text}</p>
                 
                 {q.type === 'mcq' && q.options && (
                   <RadioGroup value={answers[q.id]?.toString()} onValueChange={(v) => setAnswers({...answers, [q.id]: parseInt(v)})}>
                     {q.options.map((opt, i) => (
-                      <div key={i} className={cn("flex items-center space-x-3 p-4 rounded-lg border cursor-pointer",
+                      <div key={i} className={cn("flex items-center space-x-2 sm:space-x-3 p-3 sm:p-4 rounded-lg border cursor-pointer",
                         answers[q.id] === i ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50")}>
                         <RadioGroupItem value={i.toString()} id={`opt-${i}`} />
-                        <Label htmlFor={`opt-${i}`} className="cursor-pointer flex-1">{opt}</Label>
+                        <Label htmlFor={`opt-${i}`} className="cursor-pointer flex-1 text-sm sm:text-base">{opt}</Label>
                       </div>
                     ))}
                   </RadioGroup>
@@ -222,12 +222,14 @@ const TestInterface = () => {
                     onChange={(e) => setAnswers({...answers, [q.id]: e.target.value})} />
                 )}
 
-                <div className="flex justify-between pt-4 border-t">
-                  <Button variant="outline" onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))} disabled={currentQuestion === 0}>
-                    <ChevronLeft className="h-4 w-4 mr-1" />Previous
+                <div className="flex justify-between pt-3 sm:pt-4 border-t gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))} disabled={currentQuestion === 0}>
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    <span className="hidden sm:inline">Previous</span>
+                    <span className="sm:hidden">Prev</span>
                   </Button>
                   {currentQuestion < questions.length - 1 ? (
-                    <Button onClick={() => setCurrentQuestion(currentQuestion + 1)}>Next<ChevronRight className="h-4 w-4 ml-1" /></Button>
+                    <Button size="sm" onClick={() => setCurrentQuestion(currentQuestion + 1)}>Next<ChevronRight className="h-4 w-4 ml-1" /></Button>
                   ) : null}
                 </div>
               </CardContent>
@@ -237,9 +239,9 @@ const TestInterface = () => {
       </div>
 
       <footer className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">{Object.keys(answers).length} / {questions.length} answered</span>
-          <Button onClick={handleSubmit} size="lg">Submit Test</Button>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
+          <span className="text-xs sm:text-sm text-muted-foreground">{Object.keys(answers).length} / {questions.length} answered</span>
+          <Button onClick={handleSubmit} size="sm" className="text-sm">Submit Test</Button>
         </div>
       </footer>
     </div>

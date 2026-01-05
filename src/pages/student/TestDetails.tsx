@@ -77,62 +77,62 @@ const TestDetails = () => {
         </Link>
 
         <Card className="bg-card">
-          <CardHeader>
+          <CardHeader className="p-4 sm:p-6">
             <div className="flex flex-wrap gap-2 mb-2">
-              <Badge variant="outline">{test.type}</Badge>
-              {test.subjectName && <Badge variant="secondary">{test.subjectName}</Badge>}
+              <Badge variant="outline" className="text-xs">{test.type}</Badge>
+              {test.subjectName && <Badge variant="secondary" className="text-xs">{test.subjectName}</Badge>}
             </div>
-            <CardTitle className="text-2xl">{test.title}</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-lg sm:text-2xl">{test.title}</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
               Review the test details before starting
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <FileText className="h-5 w-5 text-primary" />
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0 space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg">
+                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Test Type</p>
-                    <p className="font-medium text-foreground">{test.type}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Test Type</p>
+                    <p className="font-medium text-sm sm:text-base text-foreground">{test.type}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <BookOpen className="h-5 w-5 text-primary" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg">
+                    <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Subject</p>
-                    <p className="font-medium text-foreground">{test.subjectName || 'N/A'}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Subject</p>
+                    <p className="font-medium text-sm sm:text-base text-foreground">{test.subjectName || 'N/A'}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Clock className="h-5 w-5 text-primary" />
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg">
+                    <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Duration</p>
-                    <p className="font-medium text-foreground">{test.duration} minutes</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Duration</p>
+                    <p className="font-medium text-sm sm:text-base text-foreground">{test.duration} minutes</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Calendar className="h-5 w-5 text-primary" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg">
+                    <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Created Date</p>
-                    <p className="font-medium text-foreground">
+                    <p className="text-xs sm:text-sm text-muted-foreground">Created Date</p>
+                    <p className="font-medium text-sm sm:text-base text-foreground">
                       {new Date(test.createdAt).toLocaleDateString('en-US', {
-                        weekday: 'long',
+                        weekday: 'short',
                         year: 'numeric',
-                        month: 'long',
+                        month: 'short',
                         day: 'numeric',
                       })}
                     </p>
@@ -143,13 +143,14 @@ const TestDetails = () => {
 
             <Separator />
 
-            <div className="flex items-center justify-between p-4 bg-accent rounded-lg">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 sm:p-4 bg-accent rounded-lg">
               <div>
-                <p className="text-sm text-muted-foreground">Total Marks</p>
-                <p className="text-2xl font-bold text-accent-foreground">{test.totalMarks || 'N/A'}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Total Marks</p>
+                <p className="text-xl sm:text-2xl font-bold text-accent-foreground">{test.totalMarks || 'N/A'}</p>
               </div>
               <Button 
-                size="lg"
+                size="sm"
+                className="w-full sm:w-auto"
                 onClick={() => navigate(`/student/test/${testId}/instructions`)}
               >
                 Begin Test

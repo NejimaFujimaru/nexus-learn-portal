@@ -95,72 +95,72 @@ const TestResult = () => {
         </Link>
 
         {/* Score Card */}
-        <Card className="bg-card mb-6">
-          <CardHeader className="text-center pb-4">
-            <div className="flex justify-center mb-4">
-              <div className="p-4 bg-primary/10 rounded-full">
-                <Trophy className="h-12 w-12 text-primary" />
+        <Card className="bg-card mb-4 sm:mb-6">
+          <CardHeader className="text-center pb-2 sm:pb-4 p-4 sm:p-6">
+            <div className="flex justify-center mb-3 sm:mb-4">
+              <div className="p-3 sm:p-4 bg-primary/10 rounded-full">
+                <Trophy className="h-8 w-8 sm:h-12 sm:w-12 text-primary" />
               </div>
             </div>
-            <CardTitle className="text-xl">{test.title}</CardTitle>
-            <CardDescription>{test.subjectName || test.subjectId}</CardDescription>
+            <CardTitle className="text-lg sm:text-xl">{test.title}</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">{test.subjectName || test.subjectId}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-center mb-6">
-              <div className={`text-6xl font-bold ${getGradeColor(percentage)}`}>
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+            <div className="text-center mb-4 sm:mb-6">
+              <div className={`text-4xl sm:text-6xl font-bold ${getGradeColor(percentage)}`}>
                 {percentage}%
               </div>
-              <div className="text-lg text-muted-foreground mt-2">
+              <div className="text-sm sm:text-lg text-muted-foreground mt-1 sm:mt-2">
                 {totalScore} / {totalMarks} marks
               </div>
-              <Badge className={`mt-3 ${getGradeColor(percentage)}`} variant="secondary">
+              <Badge className={`mt-2 sm:mt-3 ${getGradeColor(percentage)}`} variant="secondary">
                 {getGradeLabel(percentage)}
               </Badge>
             </div>
 
-            <Separator className="my-6" />
+            <Separator className="my-4 sm:my-6" />
 
             {/* Section Breakdown */}
             <div>
-              <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold text-foreground mb-3 sm:mb-4 flex items-center gap-2 text-sm sm:text-base">
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 Section Breakdown
               </h3>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {(submission.mcqScore !== undefined && submission.mcqScore > 0) && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <div className="flex justify-between text-xs sm:text-sm">
                       <span className="text-foreground font-medium">MCQ</span>
                       <span className="text-muted-foreground">{submission.mcqScore} marks</span>
                     </div>
-                    <Progress value={(submission.mcqScore / totalMarks) * 100} className="h-2" />
+                    <Progress value={(submission.mcqScore / totalMarks) * 100} className="h-1.5 sm:h-2" />
                   </div>
                 )}
                 {(submission.fillBlankScore !== undefined && submission.fillBlankScore > 0) && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <div className="flex justify-between text-xs sm:text-sm">
                       <span className="text-foreground font-medium">Fill in the Blanks</span>
                       <span className="text-muted-foreground">{submission.fillBlankScore} marks</span>
                     </div>
-                    <Progress value={(submission.fillBlankScore / totalMarks) * 100} className="h-2" />
+                    <Progress value={(submission.fillBlankScore / totalMarks) * 100} className="h-1.5 sm:h-2" />
                   </div>
                 )}
                 {(submission.shortAnswerMarks !== undefined && submission.shortAnswerMarks > 0) && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <div className="flex justify-between text-xs sm:text-sm">
                       <span className="text-foreground font-medium">Short Answer</span>
                       <span className="text-muted-foreground">{submission.shortAnswerMarks} marks</span>
                     </div>
-                    <Progress value={(submission.shortAnswerMarks / totalMarks) * 100} className="h-2" />
+                    <Progress value={(submission.shortAnswerMarks / totalMarks) * 100} className="h-1.5 sm:h-2" />
                   </div>
                 )}
                 {(submission.longAnswerMarks !== undefined && submission.longAnswerMarks > 0) && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <div className="flex justify-between text-xs sm:text-sm">
                       <span className="text-foreground font-medium">Long Answer</span>
                       <span className="text-muted-foreground">{submission.longAnswerMarks} marks</span>
                     </div>
-                    <Progress value={(submission.longAnswerMarks / totalMarks) * 100} className="h-2" />
+                    <Progress value={(submission.longAnswerMarks / totalMarks) * 100} className="h-1.5 sm:h-2" />
                   </div>
                 )}
               </div>
@@ -169,17 +169,17 @@ const TestResult = () => {
         </Card>
 
         {/* AI Feedback */}
-        <Card className="bg-card mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Brain className="h-5 w-5 text-primary" />
+        <Card className="bg-card mb-4 sm:mb-6">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               AI Feedback
             </CardTitle>
-            <CardDescription>Automated analysis of your performance</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Automated analysis of your performance</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="p-4 bg-accent rounded-lg">
-              <p className="text-foreground leading-relaxed">
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+            <div className="p-3 sm:p-4 bg-accent rounded-lg">
+              <p className="text-foreground leading-relaxed text-sm sm:text-base">
                 {submission.status === 'graded' 
                   ? 'Your test has been reviewed. Check the breakdown above for detailed scores.'
                   : 'Your test is pending review. Results will be available soon.'}
@@ -190,16 +190,16 @@ const TestResult = () => {
 
         {/* Teacher Remarks */}
         <Card className="bg-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <MessageSquare className="h-5 w-5 text-primary" />
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               Teacher Remarks
             </CardTitle>
-            <CardDescription>Personal feedback from your instructor</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Personal feedback from your instructor</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-              <p className="text-foreground leading-relaxed">
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+            <div className="p-3 sm:p-4 bg-primary/5 border border-primary/20 rounded-lg">
+              <p className="text-foreground leading-relaxed text-sm sm:text-base">
                 {submission.teacherRemarks || 'No remarks yet. Check back after your teacher reviews your submission.'}
               </p>
             </div>

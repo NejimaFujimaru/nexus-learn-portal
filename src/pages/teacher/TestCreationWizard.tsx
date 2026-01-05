@@ -662,49 +662,49 @@ const TestCreationWizard = () => {
         {/* Step 3: Review & Publish */}
         {currentStep === 3 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <Eye className="h-5 w-5" />
                 Review & Publish
               </CardTitle>
               <CardDescription>Review your test before publishing</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+            <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0 space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Test Title</p>
-                  <p className="font-medium">{testTitle}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Test Title</p>
+                  <p className="font-medium text-sm sm:text-base">{testTitle}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Subject</p>
-                  <p className="font-medium">{selectedSubjectData?.name}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Subject</p>
+                  <p className="font-medium text-sm sm:text-base">{selectedSubjectData?.name}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Test Type</p>
-                  <p className="font-medium capitalize">{testType}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Test Type</p>
+                  <p className="font-medium capitalize text-sm sm:text-base">{testType}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Duration</p>
-                  <p className="font-medium">{duration} minutes</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Duration</p>
+                  <p className="font-medium text-sm sm:text-base">{duration} minutes</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Total Questions</p>
-                  <p className="font-medium">{questions.length}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Total Questions</p>
+                  <p className="font-medium text-sm sm:text-base">{questions.length}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Total Marks</p>
-                  <p className="font-medium">{totalQuestionMarks}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Total Marks</p>
+                  <p className="font-medium text-sm sm:text-base">{totalQuestionMarks}</p>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <p className="font-medium">Questions Preview</p>
+                <p className="font-medium text-sm sm:text-base">Questions Preview</p>
                 <div className="border rounded-lg divide-y max-h-64 overflow-y-auto">
                   {questions.map((q, i) => (
-                    <div key={q.id} className="p-3">
-                      <div className="flex justify-between">
-                        <span className="font-medium">Q{i + 1}. {q.text}</span>
-                        <span className="text-sm text-muted-foreground">{q.marks} marks</span>
+                    <div key={q.id} className="p-2 sm:p-3">
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="font-medium text-sm break-words">Q{i + 1}. {q.text}</span>
+                        <span className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">{q.marks} marks</span>
                       </div>
                       <span className="text-xs text-muted-foreground capitalize">({q.type})</span>
                     </div>

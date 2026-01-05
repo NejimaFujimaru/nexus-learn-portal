@@ -88,7 +88,7 @@ const Settings = () => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 md:p-8 max-w-3xl">
+      <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-3xl">
           {/* Mobile Back Button */}
           <Link 
             to={backPath}
@@ -98,28 +98,28 @@ const Settings = () => {
             Back to Dashboard
           </Link>
 
-          <h1 className="text-2xl font-bold text-foreground mb-8">Settings</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground mb-6 sm:mb-8">Settings</h1>
 
           {/* Profile Section */}
           <Card id="profile" className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <User className="h-5 w-5" />
                 Profile
               </CardTitle>
               <CardDescription>Manage your profile information</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0 space-y-4 sm:space-y-6">
               {/* Avatar */}
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarFallback className="bg-primary/10 text-primary text-lg">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <Avatar className="h-14 w-14 sm:h-16 sm:w-16">
+                  <AvatarFallback className="bg-primary/10 text-primary text-base sm:text-lg">
                     {userInitials}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <p className="text-sm text-muted-foreground">Profile Picture</p>
-                  <Button variant="outline" size="sm" disabled className="mt-1">
+                  <Button variant="outline" size="sm" disabled className="mt-1 text-xs sm:text-sm">
                     Upload Photo (Coming Soon)
                   </Button>
                 </div>
@@ -130,7 +130,7 @@ const Settings = () => {
               {/* Name */}
               <div className="space-y-2">
                 <Label htmlFor="name">Display Name</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Input 
                     id="name" 
                     value={displayName} 
@@ -142,6 +142,8 @@ const Settings = () => {
                     <div className="flex gap-2">
                       <Button 
                         variant="outline" 
+                        size="sm"
+                        className="flex-1 sm:flex-none"
                         onClick={() => {
                           setDisplayName(userName);
                           setIsEditingName(false);
@@ -149,7 +151,7 @@ const Settings = () => {
                       >
                         Cancel
                       </Button>
-                      <Button onClick={handleSaveName} disabled={isSavingName}>
+                      <Button size="sm" className="flex-1 sm:flex-none" onClick={handleSaveName} disabled={isSavingName}>
                         {isSavingName ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
@@ -158,7 +160,7 @@ const Settings = () => {
                       </Button>
                     </div>
                   ) : (
-                    <Button variant="outline" onClick={() => setIsEditingName(true)}>
+                    <Button variant="outline" size="sm" onClick={() => setIsEditingName(true)}>
                       Edit
                     </Button>
                   )}
@@ -186,25 +188,25 @@ const Settings = () => {
 
           {/* Preferences Section */}
           <Card id="preferences" className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <SettingsIcon className="h-5 w-5" />
                 Preferences
               </CardTitle>
               <CardDescription>Customize your experience</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0 space-y-4 sm:space-y-6">
               {/* Theme */}
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
                   <div>
                     <Label>Theme</Label>
-                    <p className="text-sm text-muted-foreground">Select your preferred theme</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Select your preferred theme</p>
                   </div>
                 </div>
                 <Select value={theme} onValueChange={handleThemeChange}>
-                  <SelectTrigger className="w-32">
+                  <SelectTrigger className="w-full sm:w-32">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -218,16 +220,16 @@ const Settings = () => {
               <Separator />
 
               {/* Language */}
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <Globe className="h-5 w-5" />
                   <div>
                     <Label>Language</Label>
-                    <p className="text-sm text-muted-foreground">Choose your language</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Choose your language</p>
                   </div>
                 </div>
                 <Select value={language} onValueChange={setLanguage}>
-                  <SelectTrigger className="w-32">
+                  <SelectTrigger className="w-full sm:w-32">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -242,12 +244,12 @@ const Settings = () => {
               <Separator />
 
               {/* Notifications */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <Bell className="h-5 w-5" />
                   <div>
                     <Label>Notifications</Label>
-                    <p className="text-sm text-muted-foreground">Enable or disable notifications</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Enable or disable notifications</p>
                   </div>
                 </div>
                 <Switch checked={notifications} onCheckedChange={setNotifications} />
@@ -257,24 +259,24 @@ const Settings = () => {
 
           {/* Account Section */}
           <Card id="account">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <Shield className="h-5 w-5" />
                 Account
               </CardTitle>
               <CardDescription>Manage your account settings</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0 space-y-4 sm:space-y-6">
               {/* Change Password */}
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <Lock className="h-5 w-5" />
+                  <Lock className="h-5 w-5 flex-shrink-0" />
                   <div>
                     <Label>Change Password</Label>
-                    <p className="text-sm text-muted-foreground">Update your password</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Update your password</p>
                   </div>
                 </div>
-                <Button variant="outline" disabled>
+                <Button variant="outline" size="sm" disabled className="w-full sm:w-auto text-xs sm:text-sm">
                   Change Password (Coming Soon)
                 </Button>
               </div>
