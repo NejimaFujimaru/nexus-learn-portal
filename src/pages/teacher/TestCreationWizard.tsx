@@ -33,7 +33,7 @@ import { toast } from '@/hooks/use-toast';
 
 interface Question {
   id: string;
-  type: 'mcq' | 'blank' | 'short';
+  type: 'mcq' | 'blank' | 'short' | 'long';
   text: string;
   options?: string[];
   correctAnswer?: string;
@@ -283,8 +283,8 @@ const TestCreationWizard = () => {
 
       // Map question types and save each question with testId reference
       const questionsToSave = questions.map(q => {
-        // Map 'blank' to 'fillBlank' and 'short' to 'shortAnswer' for Firebase types
-        const mappedType = q.type === 'blank' ? 'fillBlank' : q.type === 'short' ? 'shortAnswer' : 'mcq';
+        // Map 'blank' to 'fillBlank', 'short' to 'shortAnswer', and 'long' to 'longAnswer' for Firebase types
+        const mappedType = q.type === 'blank' ? 'fillBlank' : q.type === 'short' ? 'shortAnswer' : q.type === 'long' ? 'longAnswer' : 'mcq';
         return {
           id: q.id,
           testId: testId,
@@ -294,7 +294,7 @@ const TestCreationWizard = () => {
           // Only include options for MCQ, and ensure they are valid strings
           ...(mappedType === 'mcq' && q.options ? { options: q.options.filter(o => o && o.trim()) } : {}),
           // Include correctAnswer for mcq and fillBlank
-          ...(mappedType !== 'shortAnswer' && q.correctAnswer !== undefined ? { correctAnswer: q.correctAnswer } : {})
+          ...(mappedType !== 'shortAnswer' && mappedType !== 'longAnswer' && q.correctAnswer !== undefined ? { correctAnswer: q.correctAnswer } : {})
         };
       });
 
@@ -480,7 +480,7 @@ const TestCreationWizard = () => {
                     value={newQuestion.type} 
                     onValueChange={(v) => setNewQuestion({
                       ...newQuestion, 
-                      type: v as 'mcq' | 'blank' | 'short',
+                      type: v as 'mcq' | 'blank' | 'short' | 'long',
                       options: v === 'mcq' ? ['', '', '', ''] : undefined,
                       correctAnswer: ''
                     })}
@@ -492,6 +492,7 @@ const TestCreationWizard = () => {
                       <SelectItem value="mcq">Multiple Choice (MCQ)</SelectItem>
                       <SelectItem value="blank">Fill in the Blank</SelectItem>
                       <SelectItem value="short">Short Answer</SelectItem>
+                      <SelectItem value="long">Long Answer</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

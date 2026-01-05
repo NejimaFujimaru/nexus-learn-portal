@@ -183,8 +183,11 @@ const SubmissionReview = () => {
   const handleApprove = async () => {
     try {
       const { mcqScore, fillBlankScore } = calculateScores();
-      const shortAnswerMarks = Object.values(questionMarks).reduce((sum, m) => sum + (m || 0), 0);
-      const totalScore = mcqScore + fillBlankScore + shortAnswerMarks;
+      const shortQuestions = questions.filter(q => q.type === 'shortAnswer');
+      const longQuestions = questions.filter(q => q.type === 'longAnswer');
+      const shortAnswerMarksTotal = shortQuestions.reduce((sum, q) => sum + (questionMarks[q.id] || 0), 0);
+      const longAnswerMarksTotal = longQuestions.reduce((sum, q) => sum + (questionMarks[q.id] || 0), 0);
+      const totalScore = mcqScore + fillBlankScore + shortAnswerMarksTotal + longAnswerMarksTotal;
       
       await dbOperations.updateSubmission(submission.id, {
         status: 'graded',
@@ -194,7 +197,8 @@ const SubmissionReview = () => {
         mcqScore,
         fillBlankScore,
         totalAutoScore: mcqScore + fillBlankScore,
-        shortAnswerMarks,
+        shortAnswerMarks: shortAnswerMarksTotal,
+        longAnswerMarks: longAnswerMarksTotal,
         finalScore: totalScore
       });
       toast({ title: "Submission graded successfully" });
@@ -220,9 +224,11 @@ const SubmissionReview = () => {
   const mcqQuestions = questions.filter(q => q.type === 'mcq');
   const fillBlankQuestions = questions.filter(q => q.type === 'fillBlank');
   const shortAnswerQuestions = questions.filter(q => q.type === 'shortAnswer');
+  const longAnswerQuestions = questions.filter(q => q.type === 'longAnswer');
   const { mcqScore: calculatedMcqScore, fillBlankScore: calculatedFillBlankScore } = calculateScores();
-  const shortAnswerMarks = Object.values(questionMarks).reduce((s, m) => s + (m || 0), 0);
-  const totalScore = calculatedMcqScore + calculatedFillBlankScore + shortAnswerMarks;
+  const shortAnswerMarks = shortAnswerQuestions.reduce((sum, q) => sum + (questionMarks[q.id] || 0), 0);
+  const longAnswerMarks = longAnswerQuestions.reduce((sum, q) => sum + (questionMarks[q.id] || 0), 0);
+  const totalScore = calculatedMcqScore + calculatedFillBlankScore + shortAnswerMarks + longAnswerMarks;
 
   return (
     <div className="min-h-screen bg-background">
@@ -469,6 +475,45 @@ const SubmissionReview = () => {
                 </CardContent>
               </Card>
             )}
+
+            {/* Long Answers */}
+            {longAnswerQuestions.length > 0 && (
+              <Card className="bg-card">
+                <CardHeader>
+                  <CardTitle className="text-lg">Long Answer Questions</CardTitle>
+                  <CardDescription>Review and assign marks for detailed answers</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {longAnswerQuestions.map((q, index) => {
+                    const studentAnswer = getAnswerForQuestion(q.id);
+                    
+                    return (
+                      <div key={q.id} className="p-4 bg-accent rounded-lg">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="font-medium text-foreground">Q{index + 1}. {q.text}</p>
+                          <Badge variant="outline">{q.marks} marks</Badge>
+                        </div>
+                        <div className="bg-card p-4 rounded border border-border mb-3 min-h-[120px]">
+                          <p className="text-sm text-foreground whitespace-pre-wrap">{studentAnswer || 'No answer provided'}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label className="text-sm">Award marks:</Label>
+                          <Input 
+                            type="number"
+                            min={0}
+                            max={q.marks}
+                            className="w-20"
+                            value={questionMarks[q.id] ?? 0}
+                            onChange={(e) => handleQuestionMarkChange(q.id, parseInt(e.target.value) || 0)}
+                          />
+                          <span className="text-sm text-muted-foreground">/ {q.marks}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -493,6 +538,10 @@ const SubmissionReview = () => {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Short Answer Marks</span>
                   <span className="font-medium">{shortAnswerMarks}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Long Answer Marks</span>
+                  <span className="font-medium">{longAnswerMarks}</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
                   <span className="font-medium">Total Score</span>

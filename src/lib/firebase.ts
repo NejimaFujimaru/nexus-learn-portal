@@ -128,7 +128,7 @@ export interface Chapter {
 export interface Question {
   id: string;
   testId: string;
-  type: 'mcq' | 'fillBlank' | 'shortAnswer';
+  type: 'mcq' | 'fillBlank' | 'shortAnswer' | 'longAnswer';
   text: string;
   options?: string[];
   correctAnswer?: string | number;
@@ -162,6 +162,7 @@ export interface Submission {
   fillBlankScore: number;
   totalAutoScore: number;
   shortAnswerMarks?: number;
+  longAnswerMarks?: number;
   questionMarks?: Record<string, number>;
   manualOverrides?: Record<string, boolean>;
   totalManualMarks?: number;
