@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Header } from '@/components/layout/Header';
-import { Users, FileText, ClipboardList, Plus, Eye, BookOpen } from 'lucide-react';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Users, FileText, ClipboardList, Plus, Eye, BookOpen, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,34 +30,39 @@ const TeacherDashboard = () => {
 
   const pendingSubmissions = submissions.filter(s => s.status === 'pending');
 
-  const stats = [
-    { icon: BookOpen, label: 'Total Subjects', value: subjects.length, color: 'text-primary' },
-    { icon: FileText, label: 'Total Tests', value: tests.length, color: 'text-chart-1' },
-    { icon: ClipboardList, label: 'Pending Submissions', value: pendingSubmissions.length, color: 'text-chart-3' },
+  // Quick stats cards
+  const quickStats = [
+    { icon: BookOpen, label: 'Subjects', value: subjects.length, color: 'text-primary', path: '/teacher/subjects' },
+    { icon: Users, label: 'Students', value: '--', color: 'text-chart-2', path: '/teacher/students' },
+    { icon: FileText, label: 'Tests', value: tests.length, color: 'text-chart-1', path: '/teacher/create-test' },
+    { icon: ClipboardList, label: 'Submissions', value: pendingSubmissions.length, color: 'text-chart-3', path: '/teacher/submissions' },
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header userType="teacher" userName={userName} />
-      
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, {userName}!</h1>
+    <DashboardLayout userType="teacher" userName={userName}>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        {/* Welcome Section */}
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Welcome back, {userName}!</h1>
           <p className="text-muted-foreground">Manage your classes and review student submissions.</p>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {stats.map((stat, index) => (
-            <Card key={index} className="bg-card">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
+        {/* Quick Stats Grid - 4 Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          {quickStats.map((stat, index) => (
+            <Card 
+              key={index} 
+              className="bg-card cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate(stat.path)}
+            >
+              <CardContent className="p-4 sm:pt-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10 w-fit">
                     <stat.icon className={`h-5 w-5 ${stat.color}`} />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-card-foreground">{stat.value}</p>
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-card-foreground">{stat.value}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">{stat.label}</p>
                   </div>
                 </div>
               </CardContent>
@@ -182,8 +187,8 @@ const TeacherDashboard = () => {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

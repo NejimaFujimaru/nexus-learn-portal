@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Header } from '@/components/layout/Header';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, ThumbsUp, Edit3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,20 +77,16 @@ const SubmissionReview = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header userType="teacher" userName={userName} />
-        <main className="max-w-4xl mx-auto px-4 py-8">
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        </main>
-      </div>
+      <DashboardLayout userType="teacher" userName={userName}>
+        <div className="p-8 text-center text-muted-foreground">Loading...</div>
+      </DashboardLayout>
     );
   }
 
   if (!submission) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header userType="teacher" userName={userName} />
-        <main className="max-w-4xl mx-auto px-4 py-8">
+      <DashboardLayout userType="teacher" userName={userName}>
+        <div className="p-8 max-w-4xl mx-auto">
           <Card className="bg-card">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <AlertCircle className="h-12 w-12 text-destructive mb-4" />
@@ -100,8 +96,8 @@ const SubmissionReview = () => {
               </Button>
             </CardContent>
           </Card>
-        </main>
-      </div>
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -231,10 +227,8 @@ const SubmissionReview = () => {
   const totalScore = calculatedMcqScore + calculatedFillBlankScore + shortAnswerMarks + longAnswerMarks;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header userType="teacher" userName={userName} />
-      
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <DashboardLayout userType="teacher" userName={userName}>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
         <Link 
           to="/teacher/submissions" 
           className="inline-flex items-center text-muted-foreground hover:text-primary mb-6 transition-colors"
@@ -579,8 +573,8 @@ const SubmissionReview = () => {
             </Card>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 
