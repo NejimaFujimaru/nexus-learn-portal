@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Header } from '@/components/layout/Header';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ArrowLeft, Plus, Edit2, Trash2, BookOpen, FileText, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -88,21 +89,14 @@ const ManageSubjects = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background">
-      <Header userType="teacher" userName="Dr. Sarah Mitchell" />
-      
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link 
-          to="/teacher/dashboard" 
-          className="inline-flex items-center text-muted-foreground hover:text-primary mb-6 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Dashboard
-        </Link>
+  const { user } = useAuth();
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Teacher';
 
+  return (
+    <DashboardLayout userType="teacher" userName={userName}>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Manage Subjects</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Manage Subjects</h1>
           <p className="text-muted-foreground">Add subjects and organize chapters within them.</p>
         </div>
 
@@ -269,8 +263,8 @@ const ManageSubjects = () => {
             )}
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

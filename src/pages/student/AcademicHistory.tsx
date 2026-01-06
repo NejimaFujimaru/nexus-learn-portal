@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Header } from '@/components/layout/Header';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { FileText, Trophy, TrendingUp, Calendar } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { dbOperations, Test, Submission } from '@/lib/firebase';
@@ -55,12 +55,10 @@ const AcademicHistory = () => {
     : 0;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header userType="student" userName={userName} />
-      
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <DashboardLayout userType="student" userName={userName}>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Academic History</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Academic History</h1>
           <p className="text-muted-foreground">Track your learning progress and performance over time.</p>
         </div>
 
@@ -218,8 +216,8 @@ const AcademicHistory = () => {
             </div>
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 
