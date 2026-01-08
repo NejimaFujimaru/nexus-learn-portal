@@ -126,13 +126,15 @@ For Long Answer:
 
 Return ONLY the JSON array, no markdown, no explanation:`;
 
+      const storedKey = localStorage.getItem(OPENROUTER_API_KEY_STORAGE) || apiKey;
+      
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${storedKey}`,
           'HTTP-Referer': window.location.origin,
-          'X-Title': 'Nexus Learn Test Creator'
+          'X-Title': 'Nexus Learn Test Creator',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: 'meta-llama/llama-3.3-8b-instruct:free',
