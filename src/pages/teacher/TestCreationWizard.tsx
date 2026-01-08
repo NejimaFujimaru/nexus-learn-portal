@@ -27,6 +27,7 @@ import {
   Loader2,
   Eye
 } from 'lucide-react';
+import { AIQuestionGenerator } from '@/components/teacher/AIQuestionGenerator';
 import { getSubjects, database, dbOperations } from '@/lib/firebase';
 import { ref, get, push, set } from 'firebase/database';
 import { toast } from '@/hooks/use-toast';
@@ -237,6 +238,10 @@ const TestCreationWizard = () => {
     });
     
     toast({ title: 'Question Added', description: `Question ${questions.length + 1} added successfully!` });
+  };
+
+  const addGeneratedQuestions = (generatedQuestions: Question[]) => {
+    setQuestions(prev => [...prev, ...generatedQuestions]);
   };
 
   const removeQuestion = (id: string) => {
@@ -465,12 +470,33 @@ const TestCreationWizard = () => {
         {/* Step 2: Add Questions */}
         {currentStep === 2 && (
           <div className="space-y-6">
+            {/* AI Question Generator */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Plus className="h-5 w-5" />
+                    Add Questions
+                  </span>
+                  <AIQuestionGenerator
+                    selectedChapters={selectedChapters}
+                    chapters={subjectChapters}
+                    subjectName={selectedSubjectData?.name || 'Unknown Subject'}
+                    onQuestionsGenerated={addGeneratedQuestions}
+                  />
+                </CardTitle>
+                <CardDescription>
+                  Add questions manually or use AI to generate them from chapter content
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
             {/* Add New Question Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Plus className="h-5 w-5" />
-                  Add New Question
+                  Add Question Manually
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
