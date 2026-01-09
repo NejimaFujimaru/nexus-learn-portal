@@ -30,6 +30,12 @@ import SubmissionsList from "./pages/teacher/SubmissionsList";
 import SubmissionReview from "./pages/teacher/SubmissionReview";
 import ManageSubjects from "./pages/teacher/ManageSubjects";
 import ManageStudents from "./pages/teacher/ManageStudents";
+import ManageClasses from "./pages/teacher/ManageClasses";
+import ManageTests from "./pages/teacher/ManageTests";
+
+// Additional Student Pages
+import PracticeHub from "./pages/student/PracticeHub";
+import StudentClass from "./pages/student/StudentClass";
 
 // Shared Pages
 import Settings from "./pages/Settings";
@@ -87,6 +93,16 @@ const App = () => (
                 <AcademicHistory />
               </ProtectedRoute>
             } />
+            <Route path="/student/practice-hub" element={
+              <ProtectedRoute allowedRole="student">
+                <PracticeHub />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/class" element={
+              <ProtectedRoute allowedRole="student">
+                <StudentClass />
+              </ProtectedRoute>
+            } />
             
             {/* Settings Route - accessible by both roles */}
             <Route path="/settings" element={
@@ -129,6 +145,16 @@ const App = () => (
             <Route path="/teacher/students" element={
               <ProtectedRoute allowedRole="teacher">
                 <ManageStudents />
+              </ProtectedRoute>
+            } />
+            <Route path="/teacher/classes" element={
+              <ProtectedRoute allowedRole="teacher">
+                <ManageClasses />
+              </ProtectedRoute>
+            } />
+            <Route path="/teacher/tests" element={
+              <ProtectedRoute allowedRole="teacher">
+                <ManageTests />
               </ProtectedRoute>
             } />
             

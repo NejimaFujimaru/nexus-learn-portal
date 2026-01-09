@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Users, FileText, ClipboardList, Plus, Eye, BookOpen, GraduationCap } from 'lucide-react';
+import { Users, FileText, ClipboardList, Plus, Eye, BookOpen, GraduationCap, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { dbOperations, Subject, Test, Submission } from '@/lib/firebase';
+import { dbOperations, Subject, Test, Submission, database } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
+import { ref, onValue } from 'firebase/database';
+
+interface Student {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+}
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -16,15 +24,30 @@ const TeacherDashboard = () => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tests, setTests] = useState<Test[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [studentCount, setStudentCount] = useState(0);
 
   useEffect(() => {
     const unsubSubjects = dbOperations.subscribeToSubjects(setSubjects);
     const unsubTests = dbOperations.subscribeToTests(setTests);
     const unsubSubmissions = dbOperations.subscribeToSubmissions(setSubmissions);
+    
+    // Subscribe to students count
+    const usersRef = ref(database, 'users');
+    const unsubUsers = onValue(usersRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        setStudentCount(0);
+        return;
+      }
+      const data = snapshot.val();
+      const students = Object.values(data).filter((u: any) => u.role === 'student');
+      setStudentCount(students.length);
+    });
+
     return () => {
       unsubSubjects();
       unsubTests();
       unsubSubmissions();
+      unsubUsers();
     };
   }, []);
 
@@ -33,9 +56,9 @@ const TeacherDashboard = () => {
   // Quick stats cards
   const quickStats = [
     { icon: BookOpen, label: 'Subjects', value: subjects.length, color: 'text-primary', path: '/teacher/subjects' },
-    { icon: Users, label: 'Students', value: '--', color: 'text-chart-2', path: '/teacher/students' },
-    { icon: FileText, label: 'Tests', value: tests.length, color: 'text-chart-1', path: '/teacher/create-test' },
-    { icon: ClipboardList, label: 'Submissions', value: pendingSubmissions.length, color: 'text-chart-3', path: '/teacher/submissions' },
+    { icon: Users, label: 'Students', value: studentCount, color: 'text-chart-2', path: '/teacher/students' },
+    { icon: FileText, label: 'Tests', value: tests.length, color: 'text-chart-1', path: '/teacher/tests' },
+    { icon: ClipboardList, label: 'Pending', value: pendingSubmissions.length, color: 'text-chart-3', path: '/teacher/submissions' },
   ];
 
   return (
@@ -80,13 +103,17 @@ const TeacherDashboard = () => {
             <Plus className="h-4 w-4 mr-1 sm:mr-2" />
             <span className="hidden sm:inline">Create</span> Test
           </Button>
+          <Button size="sm" variant="outline" className="text-xs sm:text-sm h-9 sm:h-10" onClick={() => navigate('/teacher/tests')}>
+            <Layers className="h-4 w-4 mr-1 sm:mr-2" />
+            Tests
+          </Button>
           <Button size="sm" variant="outline" className="text-xs sm:text-sm h-9 sm:h-10" onClick={() => navigate('/teacher/submissions')}>
             <Eye className="h-4 w-4 mr-1 sm:mr-2" />
             Submissions
           </Button>
-          <Button size="sm" variant="outline" className="text-xs sm:text-sm h-9 sm:h-10" onClick={() => navigate('/teacher/students')}>
-            <Users className="h-4 w-4 mr-1 sm:mr-2" />
-            Students
+          <Button size="sm" variant="outline" className="text-xs sm:text-sm h-9 sm:h-10" onClick={() => navigate('/teacher/classes')}>
+            <GraduationCap className="h-4 w-4 mr-1 sm:mr-2" />
+            Classes
           </Button>
         </div>
 
