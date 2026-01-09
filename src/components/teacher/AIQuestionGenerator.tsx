@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Sparkles, Key, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -32,6 +33,15 @@ interface AIQuestionGeneratorProps {
 
 const OPENROUTER_API_KEY_STORAGE = 'openrouter_api_key';
 
+// Free models that work on OpenRouter
+const FREE_MODELS = [
+  { id: 'google/gemma-2-9b-it:free', name: 'Google Gemma 2 9B (Free)' },
+  { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B (Free)' },
+  { id: 'qwen/qwen-2-7b-instruct:free', name: 'Qwen 2 7B (Free)' },
+  { id: 'microsoft/phi-3-mini-128k-instruct:free', name: 'Microsoft Phi-3 Mini (Free)' },
+  { id: 'huggingfaceh4/zephyr-7b-beta:free', name: 'Zephyr 7B (Free)' },
+];
+
 export const AIQuestionGenerator = ({
   selectedChapters,
   chapters,
@@ -42,6 +52,7 @@ export const AIQuestionGenerator = ({
   const [apiKey, setApiKey] = useState('');
   const [isKeySet, setIsKeySet] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(FREE_MODELS[0].id);
   
   // Question counts
   const [mcqCount, setMcqCount] = useState(5);
@@ -76,7 +87,12 @@ export const AIQuestionGenerator = ({
 
   const getSelectedChaptersContent = () => {
     const selected = chapters.filter(ch => selectedChapters.includes(ch.id));
-    return selected.map(ch => `Chapter: ${ch.title}\n${ch.content}`).join('\n\n---\n\n');
+    return selected.map(ch => `Chapter: ${ch.title}\nContent: ${ch.content}`).join('\n\n---\n\n');
+  };
+
+  const getSelectedChapterTitles = () => {
+    const selected = chapters.filter(ch => selectedChapters.includes(ch.id));
+    return selected.map(ch => ch.title).join(', ');
   };
 
   const generateQuestions = async () => {
@@ -86,6 +102,8 @@ export const AIQuestionGenerator = ({
     }
 
     const chapterContent = getSelectedChaptersContent();
+    const chapterTitles = getSelectedChapterTitles();
+    
     if (!chapterContent.trim()) {
       toast({ title: 'Error', description: 'No chapter content available. Please select chapters with content.', variant: 'destructive' });
       return;
@@ -100,20 +118,27 @@ export const AIQuestionGenerator = ({
     setLoading(true);
 
     try {
-      const prompt = `You are an expert teacher creating questions for a test. Based on the following chapter content from "${subjectName}", generate exactly:
+      const prompt = `You are an expert teacher creating questions for a test.
+
+SUBJECT: ${subjectName}
+CHAPTER(S): ${chapterTitles}
+
+CHAPTER CONTENT:
+${chapterContent}
+
+TASK: Generate questions ONLY from the above chapter content. Do not use external knowledge.
+
+Generate exactly:
 - ${mcqCount} Multiple Choice Questions (MCQ) with 4 options each
-- ${blankCount} Fill in the Blank questions
+- ${blankCount} Fill in the Blank questions  
 - ${shortCount} Short Answer questions
 - ${longCount} Long Answer questions
 
-Chapter Content:
-${chapterContent}
-
-Respond ONLY with a valid JSON array of questions. Each question must follow this exact format:
+Respond ONLY with a valid JSON array. Each question must follow this exact format:
 
 For MCQ:
 {"type": "mcq", "text": "Question text?", "options": ["Option A", "Option B", "Option C", "Option D"], "correctAnswer": "option0", "marks": 1}
-Note: correctAnswer should be "option0", "option1", "option2", or "option3" corresponding to the correct option index.
+Note: correctAnswer must be "option0", "option1", "option2", or "option3".
 
 For Fill in the Blank:
 {"type": "blank", "text": "The _____ is the answer.", "correctAnswer": "missing word", "marks": 1}
@@ -124,7 +149,7 @@ For Short Answer:
 For Long Answer:
 {"type": "long", "text": "Explain in detail...", "marks": 5}
 
-Return ONLY the JSON array, no markdown, no explanation:`;
+Return ONLY the JSON array, no markdown code blocks, no explanation:`;
 
       const storedKey = localStorage.getItem(OPENROUTER_API_KEY_STORAGE) || apiKey;
       
@@ -137,7 +162,7 @@ Return ONLY the JSON array, no markdown, no explanation:`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'meta-llama/llama-3.3-8b-instruct:free',
+          model: selectedModel,
           messages: [
             { role: 'user', content: prompt }
           ],
@@ -161,12 +186,24 @@ Return ONLY the JSON array, no markdown, no explanation:`;
       // Parse the JSON response
       let questions: any[];
       try {
+        // Clean the response - remove markdown code blocks if present
+        let cleanContent = content.trim();
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.slice(7);
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.slice(3);
+        }
+        if (cleanContent.endsWith('```')) {
+          cleanContent = cleanContent.slice(0, -3);
+        }
+        cleanContent = cleanContent.trim();
+        
         // Try to extract JSON from the response
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        const jsonMatch = cleanContent.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
           questions = JSON.parse(jsonMatch[0]);
         } else {
-          questions = JSON.parse(content);
+          questions = JSON.parse(cleanContent);
         }
       } catch (parseError) {
         console.error('Parse error:', parseError, 'Content:', content);
@@ -186,7 +223,7 @@ Return ONLY the JSON array, no markdown, no explanation:`;
       onQuestionsGenerated(generatedQuestions);
       toast({ 
         title: 'Questions Generated!', 
-        description: `Successfully generated ${generatedQuestions.length} questions using AI.` 
+        description: `Successfully generated ${generatedQuestions.length} questions from "${chapterTitles}".` 
       });
       setOpen(false);
 
@@ -207,36 +244,36 @@ Return ONLY the JSON array, no markdown, no explanation:`;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2 w-full sm:w-auto">
           <Sparkles className="h-4 w-4" />
-          AI Generate Questions
+          <span className="hidden xs:inline">AI</span> Generate Questions
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Sparkles className="h-5 w-5 text-primary" />
             AI Question Generator
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs sm:text-sm">
             Generate questions automatically from your chapter content using AI.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
           {/* API Key Section */}
-          <div className="space-y-3">
-            <Label className="flex items-center gap-2">
+          <div className="space-y-2 sm:space-y-3">
+            <Label className="flex items-center gap-2 text-sm">
               <Key className="h-4 w-4" />
               OpenRouter API Key
             </Label>
             {isKeySet ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2">
                 <div className="flex-1 flex items-center gap-2 p-2 bg-muted rounded-md">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span className="text-sm">API key configured</span>
+                  <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                  <span className="text-xs sm:text-sm">API key configured</span>
                 </div>
-                <Button variant="outline" size="sm" onClick={clearApiKey}>
+                <Button variant="outline" size="sm" onClick={clearApiKey} className="shrink-0">
                   Change
                 </Button>
               </div>
@@ -247,6 +284,7 @@ Return ONLY the JSON array, no markdown, no explanation:`;
                   placeholder="sk-or-v1-..."
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
+                  className="text-sm"
                 />
                 <Button onClick={saveApiKey} size="sm" className="w-full">
                   Save API Key
@@ -266,30 +304,50 @@ Return ONLY the JSON array, no markdown, no explanation:`;
             )}
           </div>
 
+          {/* Model Selection */}
+          <div className="space-y-2">
+            <Label className="text-sm">AI Model</Label>
+            <Select value={selectedModel} onValueChange={setSelectedModel}>
+              <SelectTrigger className="text-sm">
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                {FREE_MODELS.map((model) => (
+                  <SelectItem key={model.id} value={model.id} className="text-sm">
+                    {model.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Chapter Info */}
           {selectedChapters.length === 0 ? (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
+              <AlertDescription className="text-xs sm:text-sm">
                 Please select at least one chapter in Step 1 to generate questions.
               </AlertDescription>
             </Alert>
           ) : (
             <Alert>
-              <AlertDescription>
+              <AlertDescription className="text-xs sm:text-sm">
                 Generating from <strong>{selectedChapters.length}</strong> chapter(s) in <strong>{subjectName}</strong>
+                <div className="mt-1 text-muted-foreground text-xs">
+                  {getSelectedChapterTitles()}
+                </div>
               </AlertDescription>
             </Alert>
           )}
 
           {/* Question Counts */}
-          <div className="space-y-4">
-            <Label>Number of Questions by Type</Label>
+          <div className="space-y-3 sm:space-y-4">
+            <Label className="text-sm">Number of Questions by Type</Label>
             
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {/* MCQ */}
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs sm:text-sm">
                   <span>Multiple Choice (MCQ)</span>
                   <span className="font-medium">{mcqCount}</span>
                 </div>
@@ -304,7 +362,7 @@ Return ONLY the JSON array, no markdown, no explanation:`;
 
               {/* Fill in the Blank */}
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs sm:text-sm">
                   <span>Fill in the Blank</span>
                   <span className="font-medium">{blankCount}</span>
                 </div>
@@ -319,7 +377,7 @@ Return ONLY the JSON array, no markdown, no explanation:`;
 
               {/* Short Answer */}
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs sm:text-sm">
                   <span>Short Answer</span>
                   <span className="font-medium">{shortCount}</span>
                 </div>
@@ -334,7 +392,7 @@ Return ONLY the JSON array, no markdown, no explanation:`;
 
               {/* Long Answer */}
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs sm:text-sm">
                   <span>Long Answer</span>
                   <span className="font-medium">{longCount}</span>
                 </div>
@@ -349,7 +407,7 @@ Return ONLY the JSON array, no markdown, no explanation:`;
             </div>
 
             <div className="pt-2 border-t">
-              <div className="flex justify-between font-medium">
+              <div className="flex justify-between font-medium text-sm">
                 <span>Total Questions</span>
                 <span>{totalQuestions}</span>
               </div>
@@ -361,16 +419,17 @@ Return ONLY the JSON array, no markdown, no explanation:`;
             onClick={generateQuestions} 
             disabled={loading || !isKeySet || selectedChapters.length === 0 || totalQuestions === 0}
             className="w-full"
+            size="sm"
           >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating {totalQuestions} Questions...
+                <span className="text-xs sm:text-sm">Generating {totalQuestions} Questions...</span>
               </>
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Generate {totalQuestions} Questions
+                <span className="text-xs sm:text-sm">Generate {totalQuestions} Questions</span>
               </>
             )}
           </Button>

@@ -29,14 +29,17 @@ interface AppSidebarProps {
 const teacherMenuItems = [
   { label: 'Dashboard', path: '/teacher/dashboard', icon: LayoutDashboard },
   { label: 'Subjects', path: '/teacher/subjects', icon: BookOpen },
+  { label: 'Tests', path: '/teacher/tests', icon: ClipboardList },
   { label: 'Create Test', path: '/teacher/create-test', icon: Plus },
-  { label: 'Submissions', path: '/teacher/submissions', icon: ClipboardList },
+  { label: 'Classes', path: '/teacher/classes', icon: GraduationCap },
   { label: 'Students', path: '/teacher/students', icon: Users },
 ];
 
 const studentMenuItems = [
   { label: 'Dashboard', path: '/student/dashboard', icon: LayoutDashboard },
-  { label: 'Academic History', path: '/student/history', icon: History },
+  { label: 'Practice Hub', path: '/student/practice-hub', icon: BookOpen },
+  { label: 'My Class', path: '/student/class', icon: GraduationCap },
+  { label: 'History', path: '/student/history', icon: History },
 ];
 
 export const AppSidebar = ({ userType, userName = 'User' }: AppSidebarProps) => {
