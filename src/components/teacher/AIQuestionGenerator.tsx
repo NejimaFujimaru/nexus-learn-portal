@@ -41,8 +41,18 @@ const DEFAULT_MARKS = {
   long: 5
 };
 
-// Fixed model from database config
-const FIXED_MODEL = 'tngtech/deepseek-r1t2-chimera:free';
+// Models to try in order (fallback chain for reliability)
+const MODELS = [
+  'google/gemma-2-9b-it:free',
+  'meta-llama/llama-3.2-3b-instruct:free',
+  'qwen/qwen-2-7b-instruct:free'
+];
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const AIQuestionGenerator = ({
   selectedChapters,
@@ -196,66 +206,111 @@ For Long Answer:
 
 Return ONLY the JSON array, no markdown code blocks, no explanation, no thinking process:`;
 
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Nexus Learn Test Creator',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: FIXED_MODEL,
-          messages: [
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 4000
-        })
-      });
+      let lastError: Error | null = null;
+      let questions: any[] | null = null;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('API Error Response:', errorData);
-        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+      // Try each model with retries
+      for (const model of MODELS) {
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            console.log(`Trying model: ${model}, attempt ${attempt}/${MAX_RETRIES}`);
+            
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'HTTP-Referer': window.location.origin,
+                'X-Title': 'Nexus Learn Test Creator',
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: model,
+                messages: [
+                  { role: 'user', content: prompt }
+                ],
+                temperature: 0.7,
+                max_tokens: 4000
+              })
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              console.warn(`API Error (${model}, attempt ${attempt}):`, errorData);
+              lastError = new Error(errorData.error?.message || `API Error: ${response.status}`);
+              
+              // If rate limited or server error, wait before retry
+              if (response.status === 429 || response.status >= 500) {
+                await sleep(RETRY_DELAY * attempt);
+              }
+              continue;
+            }
+
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content;
+
+            if (!content || content.trim().length === 0) {
+              console.warn(`Empty response from ${model}, attempt ${attempt}`);
+              lastError = new Error('Empty response from AI');
+              await sleep(RETRY_DELAY);
+              continue;
+            }
+
+            // Parse the JSON response
+            try {
+              let cleanContent = content.trim();
+              
+              // Remove <think>...</think> tags if present
+              cleanContent = cleanContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+              
+              if (cleanContent.startsWith('```json')) {
+                cleanContent = cleanContent.slice(7);
+              } else if (cleanContent.startsWith('```')) {
+                cleanContent = cleanContent.slice(3);
+              }
+              if (cleanContent.endsWith('```')) {
+                cleanContent = cleanContent.slice(0, -3);
+              }
+              cleanContent = cleanContent.trim();
+              
+              // Try to extract JSON from the response
+              const jsonMatch = cleanContent.match(/\[[\s\S]*\]/);
+              if (jsonMatch) {
+                questions = JSON.parse(jsonMatch[0]);
+              } else {
+                questions = JSON.parse(cleanContent);
+              }
+              
+              // Validate we got an array
+              if (!Array.isArray(questions) || questions.length === 0) {
+                throw new Error('Invalid response format');
+              }
+              
+              // Success! Break out of retry loop
+              console.log(`Success with ${model} on attempt ${attempt}`);
+              break;
+            } catch (parseError) {
+              console.warn(`Parse error (${model}, attempt ${attempt}):`, parseError);
+              lastError = new Error('Failed to parse AI response');
+              await sleep(RETRY_DELAY);
+              continue;
+            }
+          } catch (fetchError) {
+            console.warn(`Fetch error (${model}, attempt ${attempt}):`, fetchError);
+            lastError = fetchError instanceof Error ? fetchError : new Error('Network error');
+            await sleep(RETRY_DELAY);
+            continue;
+          }
+        }
+        
+        // If we got questions, break out of model loop
+        if (questions && questions.length > 0) {
+          break;
+        }
       }
 
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
-
-      if (!content) {
-        throw new Error('No response from AI');
-      }
-
-      // Parse the JSON response
-      let questions: any[];
-      try {
-        // Clean the response - remove markdown code blocks and thinking if present
-        let cleanContent = content.trim();
-        
-        // Remove <think>...</think> tags if present
-        cleanContent = cleanContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-        
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.slice(7);
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.slice(3);
-        }
-        if (cleanContent.endsWith('```')) {
-          cleanContent = cleanContent.slice(0, -3);
-        }
-        cleanContent = cleanContent.trim();
-        
-        // Try to extract JSON from the response
-        const jsonMatch = cleanContent.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          questions = JSON.parse(jsonMatch[0]);
-        } else {
-          questions = JSON.parse(cleanContent);
-        }
-      } catch (parseError) {
-        console.error('Parse error:', parseError, 'Content:', content);
-        throw new Error('Failed to parse AI response. Please try again.');
+      // If no questions were generated after all retries
+      if (!questions || questions.length === 0) {
+        throw lastError || new Error('Failed to generate questions after multiple attempts');
       }
 
       // Add IDs and validate marks
