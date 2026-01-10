@@ -63,17 +63,29 @@ export const AppSidebar = ({ userType, userName = 'User' }: AppSidebarProps) => 
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      {/* Logo */}
+      {/* Logo + Collapse Toggle */}
       <div className={cn(
         "flex items-center gap-2 p-4 border-b border-border",
         collapsed && "justify-center"
       )}>
         <GraduationCap className="h-8 w-8 text-primary shrink-0" />
         {!collapsed && (
-          <span className="text-xl font-bold text-foreground whitespace-nowrap">
+          <span className="text-xl font-bold text-foreground whitespace-nowrap flex-1">
             Nexus Learn
           </span>
         )}
+        {/* Collapse Toggle - Desktop Only (moved to top) */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="hidden md:flex items-center justify-center p-1.5 hover:bg-accent rounded-md transition-colors"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
       </div>
 
       {/* Navigation */}
@@ -144,17 +156,6 @@ export const AppSidebar = ({ userType, userName = 'User' }: AppSidebarProps) => 
         )}
       </div>
 
-      {/* Collapse Toggle - Desktop Only */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="hidden md:flex items-center justify-center p-3 border-t border-border hover:bg-accent transition-colors"
-      >
-        {collapsed ? (
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
-        ) : (
-          <ChevronLeft className="h-5 w-5 text-muted-foreground" />
-        )}
-      </button>
     </div>
   );
 
