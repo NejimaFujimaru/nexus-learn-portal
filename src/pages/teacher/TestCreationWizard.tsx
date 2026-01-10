@@ -481,6 +481,8 @@ const TestCreationWizard = () => {
                   <AIQuestionGenerator
                     selectedChapters={selectedChapters}
                     chapters={subjectChapters}
+                    totalMarks={totalMarks}
+                    currentQuestionMarks={totalQuestionMarks}
                     subjectName={selectedSubjectData?.name || 'Unknown Subject'}
                     onQuestionsGenerated={addGeneratedQuestions}
                   />

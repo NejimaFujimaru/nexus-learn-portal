@@ -3,11 +3,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Sparkles, Key, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { database } from '@/lib/firebase';
+import { ref, get } from 'firebase/database';
 
 interface Question {
   id: string;
@@ -28,62 +28,67 @@ interface AIQuestionGeneratorProps {
   selectedChapters: string[];
   chapters: Chapter[];
   subjectName: string;
+  totalMarks: number;
+  currentQuestionMarks: number;
   onQuestionsGenerated: (questions: Question[]) => void;
 }
 
-const OPENROUTER_API_KEY_STORAGE = 'openrouter_api_key';
+// Default marks per question type
+const DEFAULT_MARKS = {
+  mcq: 1,
+  blank: 1,
+  short: 2,
+  long: 5
+};
 
-// Free models that work on OpenRouter
-const FREE_MODELS = [
-  { id: 'google/gemma-2-9b-it:free', name: 'Google Gemma 2 9B (Free)' },
-  { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B (Free)' },
-  { id: 'qwen/qwen-2-7b-instruct:free', name: 'Qwen 2 7B (Free)' },
-  { id: 'microsoft/phi-3-mini-128k-instruct:free', name: 'Microsoft Phi-3 Mini (Free)' },
-  { id: 'huggingfaceh4/zephyr-7b-beta:free', name: 'Zephyr 7B (Free)' },
-];
+// Fixed model from database config
+const FIXED_MODEL = 'tngtech/deepseek-r1t2-chimera:free';
 
 export const AIQuestionGenerator = ({
   selectedChapters,
   chapters,
   subjectName,
+  totalMarks,
+  currentQuestionMarks,
   onQuestionsGenerated
 }: AIQuestionGeneratorProps) => {
   const [open, setOpen] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [isKeySet, setIsKeySet] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(FREE_MODELS[0].id);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   
   // Question counts
   const [mcqCount, setMcqCount] = useState(5);
   const [blankCount, setBlankCount] = useState(5);
-  const [shortCount, setShortCount] = useState(5);
-  const [longCount, setLongCount] = useState(3);
+  const [shortCount, setShortCount] = useState(3);
+  const [longCount, setLongCount] = useState(2);
 
+  // Marks per question type
+  const [mcqMarks, setMcqMarks] = useState(DEFAULT_MARKS.mcq);
+  const [blankMarks, setBlankMarks] = useState(DEFAULT_MARKS.blank);
+  const [shortMarks, setShortMarks] = useState(DEFAULT_MARKS.short);
+  const [longMarks, setLongMarks] = useState(DEFAULT_MARKS.long);
+
+  // Check if API key is configured in database
   useEffect(() => {
-    const savedKey = localStorage.getItem(OPENROUTER_API_KEY_STORAGE);
-    if (savedKey) {
-      setApiKey(savedKey);
-      setIsKeySet(true);
+    const checkConfig = async () => {
+      setConfigLoading(true);
+      try {
+        const configRef = ref(database, 'config/openrouterKey');
+        const snapshot = await get(configRef);
+        setApiKeyConfigured(snapshot.exists() && snapshot.val()?.trim().length > 0);
+      } catch (error) {
+        console.error('Error checking API config:', error);
+        setApiKeyConfigured(false);
+      } finally {
+        setConfigLoading(false);
+      }
+    };
+    
+    if (open) {
+      checkConfig();
     }
-  }, []);
-
-  const saveApiKey = () => {
-    if (!apiKey.trim()) {
-      toast({ title: 'Error', description: 'Please enter your OpenRouter API key', variant: 'destructive' });
-      return;
-    }
-    localStorage.setItem(OPENROUTER_API_KEY_STORAGE, apiKey);
-    setIsKeySet(true);
-    toast({ title: 'Success', description: 'API key saved successfully!' });
-  };
-
-  const clearApiKey = () => {
-    localStorage.removeItem(OPENROUTER_API_KEY_STORAGE);
-    setApiKey('');
-    setIsKeySet(false);
-    toast({ title: 'Cleared', description: 'API key removed' });
-  };
+  }, [open]);
 
   const getSelectedChaptersContent = () => {
     const selected = chapters.filter(ch => selectedChapters.includes(ch.id));
@@ -95,9 +100,33 @@ export const AIQuestionGenerator = ({
     return selected.map(ch => ch.title).join(', ');
   };
 
+  // Calculate marks
+  const calculatedMarks = 
+    (mcqCount * mcqMarks) + 
+    (blankCount * blankMarks) + 
+    (shortCount * shortMarks) + 
+    (longCount * longMarks);
+  
+  const availableMarks = totalMarks - currentQuestionMarks;
+  const marksExceed = calculatedMarks > availableMarks;
+  const totalQuestions = mcqCount + blankCount + shortCount + longCount;
+
   const generateQuestions = async () => {
-    if (!isKeySet) {
-      toast({ title: 'Error', description: 'Please set your OpenRouter API key first', variant: 'destructive' });
+    if (!apiKeyConfigured) {
+      toast({ 
+        title: 'Configuration Error', 
+        description: 'OpenRouter API key is not configured in the database. Please contact your administrator.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    if (marksExceed) {
+      toast({ 
+        title: 'Marks Exceeded', 
+        description: `Generated questions would use ${calculatedMarks} marks, but only ${availableMarks} are available.`, 
+        variant: 'destructive' 
+      });
       return;
     }
 
@@ -105,19 +134,35 @@ export const AIQuestionGenerator = ({
     const chapterTitles = getSelectedChapterTitles();
     
     if (!chapterContent.trim()) {
-      toast({ title: 'Error', description: 'No chapter content available. Please select chapters with content.', variant: 'destructive' });
+      toast({ 
+        title: 'Error', 
+        description: 'No chapter content available. Please select chapters with content.', 
+        variant: 'destructive' 
+      });
       return;
     }
 
-    const totalQuestions = mcqCount + blankCount + shortCount + longCount;
     if (totalQuestions === 0) {
-      toast({ title: 'Error', description: 'Please select at least one question to generate', variant: 'destructive' });
+      toast({ 
+        title: 'Error', 
+        description: 'Please set at least one question to generate', 
+        variant: 'destructive' 
+      });
       return;
     }
 
     setLoading(true);
 
     try {
+      // Fetch API key from database
+      const configRef = ref(database, 'config/openrouterKey');
+      const snapshot = await get(configRef);
+      const apiKey = snapshot.val();
+      
+      if (!apiKey) {
+        throw new Error('API key not found in database configuration');
+      }
+
       const prompt = `You are an expert teacher creating questions for a test.
 
 SUBJECT: ${subjectName}
@@ -129,40 +174,38 @@ ${chapterContent}
 TASK: Generate questions ONLY from the above chapter content. Do not use external knowledge.
 
 Generate exactly:
-- ${mcqCount} Multiple Choice Questions (MCQ) with 4 options each
-- ${blankCount} Fill in the Blank questions  
-- ${shortCount} Short Answer questions
-- ${longCount} Long Answer questions
+${mcqCount > 0 ? `- ${mcqCount} Multiple Choice Questions (MCQ) with 4 options each, ${mcqMarks} mark(s) each` : ''}
+${blankCount > 0 ? `- ${blankCount} Fill in the Blank questions, ${blankMarks} mark(s) each` : ''}
+${shortCount > 0 ? `- ${shortCount} Short Answer questions, ${shortMarks} mark(s) each` : ''}
+${longCount > 0 ? `- ${longCount} Long Answer questions, ${longMarks} mark(s) each` : ''}
 
 Respond ONLY with a valid JSON array. Each question must follow this exact format:
 
 For MCQ:
-{"type": "mcq", "text": "Question text?", "options": ["Option A", "Option B", "Option C", "Option D"], "correctAnswer": "option0", "marks": 1}
-Note: correctAnswer must be "option0", "option1", "option2", or "option3".
+{"type": "mcq", "text": "Question text?", "options": ["Option A", "Option B", "Option C", "Option D"], "correctAnswer": "option0", "marks": ${mcqMarks}}
+Note: correctAnswer must be "option0", "option1", "option2", or "option3" (index of correct option).
 
 For Fill in the Blank:
-{"type": "blank", "text": "The _____ is the answer.", "correctAnswer": "missing word", "marks": 1}
+{"type": "blank", "text": "The _____ is the answer.", "correctAnswer": "missing word", "marks": ${blankMarks}}
 
 For Short Answer:
-{"type": "short", "text": "What is...?", "marks": 2}
+{"type": "short", "text": "What is...?", "marks": ${shortMarks}}
 
 For Long Answer:
-{"type": "long", "text": "Explain in detail...", "marks": 5}
+{"type": "long", "text": "Explain in detail...", "marks": ${longMarks}}
 
-Return ONLY the JSON array, no markdown code blocks, no explanation:`;
+Return ONLY the JSON array, no markdown code blocks, no explanation, no thinking process:`;
 
-      const storedKey = localStorage.getItem(OPENROUTER_API_KEY_STORAGE) || apiKey;
-      
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${storedKey}`,
+          'Authorization': `Bearer ${apiKey}`,
           'HTTP-Referer': window.location.origin,
           'X-Title': 'Nexus Learn Test Creator',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: selectedModel,
+          model: FIXED_MODEL,
           messages: [
             { role: 'user', content: prompt }
           ],
@@ -173,6 +216,7 @@ Return ONLY the JSON array, no markdown code blocks, no explanation:`;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error('API Error Response:', errorData);
         throw new Error(errorData.error?.message || `API Error: ${response.status}`);
       }
 
@@ -186,8 +230,12 @@ Return ONLY the JSON array, no markdown code blocks, no explanation:`;
       // Parse the JSON response
       let questions: any[];
       try {
-        // Clean the response - remove markdown code blocks if present
+        // Clean the response - remove markdown code blocks and thinking if present
         let cleanContent = content.trim();
+        
+        // Remove <think>...</think> tags if present
+        cleanContent = cleanContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        
         if (cleanContent.startsWith('```json')) {
           cleanContent = cleanContent.slice(7);
         } else if (cleanContent.startsWith('```')) {
@@ -210,20 +258,20 @@ Return ONLY the JSON array, no markdown code blocks, no explanation:`;
         throw new Error('Failed to parse AI response. Please try again.');
       }
 
-      // Add IDs to questions
+      // Add IDs and validate marks
       const generatedQuestions: Question[] = questions.map((q: any, index: number) => ({
         id: `ai-${Date.now()}-${index}`,
         type: q.type,
         text: q.text,
         options: q.options,
         correctAnswer: q.correctAnswer,
-        marks: q.marks || (q.type === 'mcq' || q.type === 'blank' ? 1 : q.type === 'short' ? 2 : 5)
+        marks: q.marks || DEFAULT_MARKS[q.type as keyof typeof DEFAULT_MARKS] || 1
       }));
 
       onQuestionsGenerated(generatedQuestions);
       toast({ 
         title: 'Questions Generated!', 
-        description: `Successfully generated ${generatedQuestions.length} questions from "${chapterTitles}".` 
+        description: `Successfully generated ${generatedQuestions.length} questions (${calculatedMarks} marks) from "${chapterTitles}".` 
       });
       setOpen(false);
 
@@ -231,7 +279,7 @@ Return ONLY the JSON array, no markdown code blocks, no explanation:`;
       console.error('AI Generation Error:', error);
       toast({ 
         title: 'Generation Failed', 
-        description: error instanceof Error ? error.message : 'Failed to generate questions', 
+        description: error instanceof Error ? error.message : 'Failed to generate questions. Please try again.', 
         variant: 'destructive' 
       });
     } finally {
@@ -239,7 +287,10 @@ Return ONLY the JSON array, no markdown code blocks, no explanation:`;
     }
   };
 
-  const totalQuestions = mcqCount + blankCount + shortCount + longCount;
+  const handleCountChange = (setter: (val: number) => void, value: string) => {
+    const num = parseInt(value) || 0;
+    setter(Math.max(0, Math.min(20, num)));
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -261,65 +312,25 @@ Return ONLY the JSON array, no markdown code blocks, no explanation:`;
         </DialogHeader>
 
         <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
-          {/* API Key Section */}
-          <div className="space-y-2 sm:space-y-3">
-            <Label className="flex items-center gap-2 text-sm">
-              <Key className="h-4 w-4" />
-              OpenRouter API Key
-            </Label>
-            {isKeySet ? (
-              <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2">
-                <div className="flex-1 flex items-center gap-2 p-2 bg-muted rounded-md">
-                  <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-                  <span className="text-xs sm:text-sm">API key configured</span>
-                </div>
-                <Button variant="outline" size="sm" onClick={clearApiKey} className="shrink-0">
-                  Change
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Input
-                  type="password"
-                  placeholder="sk-or-v1-..."
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="text-sm"
-                />
-                <Button onClick={saveApiKey} size="sm" className="w-full">
-                  Save API Key
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  Get your free API key from{' '}
-                  <a 
-                    href="https://openrouter.ai/keys" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-primary underline"
-                  >
-                    openrouter.ai/keys
-                  </a>
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Model Selection */}
-          <div className="space-y-2">
-            <Label className="text-sm">AI Model</Label>
-            <Select value={selectedModel} onValueChange={setSelectedModel}>
-              <SelectTrigger className="text-sm">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                {FREE_MODELS.map((model) => (
-                  <SelectItem key={model.id} value={model.id} className="text-sm">
-                    {model.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* API Configuration Status */}
+          {configLoading ? (
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Checking configuration...</span>
+            </div>
+          ) : apiKeyConfigured ? (
+            <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span className="text-sm text-green-700 dark:text-green-400">AI service configured and ready</span>
+            </div>
+          ) : (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs sm:text-sm">
+                AI service not configured. Please add the API key to the database at <code className="bg-muted px-1 rounded">config/openrouterKey</code>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Chapter Info */}
           {selectedChapters.length === 0 ? (
@@ -340,84 +351,128 @@ Return ONLY the JSON array, no markdown code blocks, no explanation:`;
             </Alert>
           )}
 
-          {/* Question Counts */}
+          {/* Question Counts with Number Inputs */}
           <div className="space-y-3 sm:space-y-4">
-            <Label className="text-sm">Number of Questions by Type</Label>
+            <Label className="text-sm font-medium">Number of Questions by Type</Label>
             
-            <div className="space-y-3 sm:space-y-4">
+            <div className="grid gap-3">
               {/* MCQ */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span>Multiple Choice (MCQ)</span>
-                  <span className="font-medium">{mcqCount}</span>
+              <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
+                <div className="flex-1">
+                  <span className="text-xs sm:text-sm font-medium">Multiple Choice (MCQ)</span>
+                  <div className="text-xs text-muted-foreground">{mcqMarks} mark each</div>
                 </div>
-                <Slider
-                  value={[mcqCount]}
-                  onValueChange={(v) => setMcqCount(v[0])}
-                  min={0}
-                  max={20}
-                  step={1}
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={20}
+                    value={mcqCount}
+                    onChange={(e) => handleCountChange(setMcqCount, e.target.value)}
+                    className="w-16 h-8 text-center text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground w-16">= {mcqCount * mcqMarks} marks</span>
+                </div>
               </div>
 
               {/* Fill in the Blank */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span>Fill in the Blank</span>
-                  <span className="font-medium">{blankCount}</span>
+              <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
+                <div className="flex-1">
+                  <span className="text-xs sm:text-sm font-medium">Fill in the Blank</span>
+                  <div className="text-xs text-muted-foreground">{blankMarks} mark each</div>
                 </div>
-                <Slider
-                  value={[blankCount]}
-                  onValueChange={(v) => setBlankCount(v[0])}
-                  min={0}
-                  max={20}
-                  step={1}
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={20}
+                    value={blankCount}
+                    onChange={(e) => handleCountChange(setBlankCount, e.target.value)}
+                    className="w-16 h-8 text-center text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground w-16">= {blankCount * blankMarks} marks</span>
+                </div>
               </div>
 
               {/* Short Answer */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span>Short Answer</span>
-                  <span className="font-medium">{shortCount}</span>
+              <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
+                <div className="flex-1">
+                  <span className="text-xs sm:text-sm font-medium">Short Answer</span>
+                  <div className="text-xs text-muted-foreground">{shortMarks} marks each</div>
                 </div>
-                <Slider
-                  value={[shortCount]}
-                  onValueChange={(v) => setShortCount(v[0])}
-                  min={0}
-                  max={20}
-                  step={1}
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={20}
+                    value={shortCount}
+                    onChange={(e) => handleCountChange(setShortCount, e.target.value)}
+                    className="w-16 h-8 text-center text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground w-16">= {shortCount * shortMarks} marks</span>
+                </div>
               </div>
 
               {/* Long Answer */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span>Long Answer</span>
-                  <span className="font-medium">{longCount}</span>
+              <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
+                <div className="flex-1">
+                  <span className="text-xs sm:text-sm font-medium">Long Answer</span>
+                  <div className="text-xs text-muted-foreground">{longMarks} marks each</div>
                 </div>
-                <Slider
-                  value={[longCount]}
-                  onValueChange={(v) => setLongCount(v[0])}
-                  min={0}
-                  max={20}
-                  step={1}
-                />
-              </div>
-            </div>
-
-            <div className="pt-2 border-t">
-              <div className="flex justify-between font-medium text-sm">
-                <span>Total Questions</span>
-                <span>{totalQuestions}</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={20}
+                    value={longCount}
+                    onChange={(e) => handleCountChange(setLongCount, e.target.value)}
+                    className="w-16 h-8 text-center text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground w-16">= {longCount * longMarks} marks</span>
+                </div>
               </div>
             </div>
           </div>
 
+          {/* Mark Calculation Summary */}
+          <div className="p-4 border rounded-lg space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Total Questions:</span>
+              <span className="font-medium">{totalQuestions}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Marks to Generate:</span>
+              <span className={`font-medium ${marksExceed ? 'text-destructive' : 'text-green-600'}`}>
+                {calculatedMarks}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Available Marks:</span>
+              <span className="font-medium">{availableMarks} / {totalMarks}</span>
+            </div>
+            <div className="flex justify-between text-sm border-t pt-2">
+              <span>After Generation:</span>
+              <span className={`font-bold ${marksExceed ? 'text-destructive' : ''}`}>
+                {currentQuestionMarks + calculatedMarks} / {totalMarks}
+              </span>
+            </div>
+          </div>
+
+          {/* Warning if marks exceed */}
+          {marksExceed && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="text-xs sm:text-sm">
+                <strong>Marks exceeded!</strong> Reduce the number of questions or their marks. 
+                You need to remove {calculatedMarks - availableMarks} marks.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Generate Button */}
           <Button 
             onClick={generateQuestions} 
-            disabled={loading || !isKeySet || selectedChapters.length === 0 || totalQuestions === 0}
+            disabled={loading || !apiKeyConfigured || selectedChapters.length === 0 || totalQuestions === 0 || marksExceed}
             className="w-full"
             size="sm"
           >
@@ -429,7 +484,7 @@ Return ONLY the JSON array, no markdown code blocks, no explanation:`;
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                <span className="text-xs sm:text-sm">Generate {totalQuestions} Questions</span>
+                <span className="text-xs sm:text-sm">Generate {totalQuestions} Questions ({calculatedMarks} marks)</span>
               </>
             )}
           </Button>
