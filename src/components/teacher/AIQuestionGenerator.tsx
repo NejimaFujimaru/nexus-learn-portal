@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
@@ -56,7 +57,11 @@ export const AIQuestionGenerator = ({
   const [loading, setLoading] = useState(false);
   const [configLoading, setConfigLoading] = useState(true);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
-  
+
+  // UI progress
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStage, setGenerationStage] = useState<string>('');
+  const progressIntervalRef = useRef<number | null>(null);
   // Question counts
   const [mcqCount, setMcqCount] = useState(5);
   const [blankCount, setBlankCount] = useState(5);
@@ -101,15 +106,27 @@ export const AIQuestionGenerator = ({
   };
 
   // Calculate marks
-  const calculatedMarks = 
-    (mcqCount * mcqMarks) + 
-    (blankCount * blankMarks) + 
-    (shortCount * shortMarks) + 
+  const calculatedMarks =
+    (mcqCount * mcqMarks) +
+    (blankCount * blankMarks) +
+    (shortCount * shortMarks) +
     (longCount * longMarks);
-  
+
   const availableMarks = totalMarks - currentQuestionMarks;
   const marksExceed = calculatedMarks > availableMarks;
   const totalQuestions = mcqCount + blankCount + shortCount + longCount;
+
+  const setStage = (stage: string, progress: number) => {
+    setGenerationStage(stage);
+    setGenerationProgress((prev) => Math.max(prev, Math.min(100, progress)));
+  };
+
+  const clearProgressInterval = () => {
+    if (progressIntervalRef.current) {
+      window.clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  };
 
   const generateQuestions = async () => {
     if (!apiKeyConfigured) {
@@ -152,16 +169,31 @@ export const AIQuestionGenerator = ({
     }
 
     setLoading(true);
+    setGenerationProgress(0);
+    setStage('Preparing generation…', 5);
+
+    clearProgressInterval();
+    // Smooth “working” animation while waiting for the network
+    progressIntervalRef.current = window.setInterval(() => {
+      setGenerationProgress((p) => {
+        // drift slowly up to 55% while we wait
+        if (p >= 55) return p;
+        return p + 1;
+      });
+    }, 350);
 
     try {
+      setStage('Reading API configuration…', 10);
       // Fetch API key from database
       const configRef = ref(database, 'config/openrouterKey');
       const snapshot = await get(configRef);
-      const apiKey = snapshot.val();
-      
-      if (!apiKey) {
-        throw new Error('API key not found in database configuration');
+      const apiKey = typeof snapshot.val() === 'string' ? snapshot.val().trim() : snapshot.val();
+
+      if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+        throw new Error('API key not found in database configuration (config/openrouterKey).');
       }
+
+      setStage('Building prompt…', 18);
 
       const prompt = `You are an expert teacher creating questions for a test.
 
@@ -198,38 +230,43 @@ For Long Answer:
 
 OUTPUT ONLY THE JSON ARRAY:`;
 
+      setStage('Contacting AI…', 25);
+
       // Retry logic for API calls
       let response: Response | null = null;
       let retryCount = 0;
       const maxRetries = 3;
-      
+
       while (retryCount < maxRetries) {
         try {
+          if (retryCount > 0) {
+            setStage(`Retrying request… (${retryCount}/${maxRetries - 1})`, 25);
+          }
+
           response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${apiKey}`,
+              Authorization: `Bearer ${apiKey}`,
+              Accept: 'application/json',
               'HTTP-Referer': window.location.origin,
               'X-Title': 'Nexus Learn Test Creator',
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
               model: FIXED_MODEL,
-              messages: [
-                { role: 'user', content: prompt }
-              ],
+              messages: [{ role: 'user', content: prompt }],
               temperature: 0.7,
               max_tokens: 4000
             })
           });
-          
+
           if (response.ok) break;
-          
+
           // If rate limited or server error, retry after delay
           if (response.status === 429 || response.status >= 500) {
             retryCount++;
             if (retryCount < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+              await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
               continue;
             }
           }
@@ -237,19 +274,48 @@ OUTPUT ONLY THE JSON ARRAY:`;
         } catch (fetchError) {
           retryCount++;
           if (retryCount >= maxRetries) throw fetchError;
-          await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+          await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
         }
       }
 
+      setStage('Reading AI response…', 60);
+
       if (!response || !response.ok) {
-        const errorData = response ? await response.json().catch(() => ({})) : {};
-        console.error('API Error Response:', errorData);
-        const errorMessage = errorData.error?.message || 
-                           (response?.status === 429 ? 'Rate limited. Please wait a moment and try again.' : 
-                            response?.status === 401 ? 'Invalid API key. Please check the configuration.' :
-                            `API Error: ${response?.status || 'Network error'}`);
+        let errorPayload: any = null;
+        let rawText = '';
+
+        if (response) {
+          rawText = await response.text().catch(() => '');
+          try {
+            errorPayload = rawText ? JSON.parse(rawText) : null;
+          } catch {
+            errorPayload = null;
+          }
+        }
+
+        console.error('OpenRouter error:', {
+          status: response?.status,
+          statusText: response?.statusText,
+          errorPayload,
+          rawText
+        });
+
+        const errorMessage =
+          errorPayload?.error?.message ||
+          (response?.status === 429
+            ? 'Rate limited. Please wait a moment and try again.'
+            : response?.status === 401
+              ? 'Invalid API key. Please check the configuration.'
+              : response?.status === 403
+                ? 'Forbidden. Check API key permissions and your OpenRouter account limits.'
+                : response?.status
+                  ? `API Error: ${response.status}`
+                  : 'Network error');
+
         throw new Error(errorMessage);
       }
+
+      setStage('Receiving response…', 60);
 
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
@@ -257,6 +323,8 @@ OUTPUT ONLY THE JSON ARRAY:`;
       if (!content) {
         throw new Error('No response from AI. Please try again.');
       }
+
+      setStage('Parsing questions…', 75);
 
       // Robust JSON parsing
       let questions: any[];
@@ -341,6 +409,10 @@ OUTPUT ONLY THE JSON ARRAY:`;
         throw new Error('No valid questions were generated. Please try again.');
       }
 
+      setStage('Finalizing…', 95);
+      clearProgressInterval();
+      setGenerationProgress(100);
+
       onQuestionsGenerated(generatedQuestions);
       toast({ 
         title: 'Questions Generated!', 
@@ -350,13 +422,16 @@ OUTPUT ONLY THE JSON ARRAY:`;
 
     } catch (error) {
       console.error('AI Generation Error:', error);
-      toast({ 
-        title: 'Generation Failed', 
-        description: error instanceof Error ? error.message : 'Failed to generate questions. Please try again.', 
-        variant: 'destructive' 
+      clearProgressInterval();
+      toast({
+        title: 'Generation Failed',
+        description: error instanceof Error ? error.message : 'Failed to generate questions. Please try again.',
+        variant: 'destructive'
       });
     } finally {
+      clearProgressInterval();
       setLoading(false);
+      // Keep the last progress value visible until dialog closes
     }
   };
 
@@ -540,6 +615,17 @@ OUTPUT ONLY THE JSON ARRAY:`;
                 You need to remove {calculatedMarks - availableMarks} marks.
               </AlertDescription>
             </Alert>
+          )}
+
+          {/* Generation Progress */}
+          {loading && (
+            <div className="space-y-2 animate-fade-in">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{generationStage || 'Generating…'}</span>
+                <span>{generationProgress}%</span>
+              </div>
+              <Progress value={generationProgress} className="h-2" />
+            </div>
           )}
 
           {/* Generate Button */}
