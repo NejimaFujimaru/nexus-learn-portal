@@ -122,78 +122,200 @@ export const AIQuestionGenerator = ({
   };
 
   const clearProgressInterval = () => {
-    if (progressIntervalRef.current) {
+    if (progressIntervalRef.current !== null) {
       window.clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = null;
     }
   };
 
+  // Progress animation like your sample: staged % increases + status messages
+  const simulateProgress = (start: number, end: number, durationMs: number, message: string) => {
+    return new Promise<void>((resolve) => {
+      clearProgressInterval();
+      setGenerationStage(message);
+
+      const tickMs = 50;
+      const steps = Math.max(1, Math.floor(durationMs / tickMs));
+      const increment = (end - start) / steps;
+      let current = start;
+
+      setGenerationProgress(Math.max(0, Math.min(100, Math.floor(current))));
+
+      progressIntervalRef.current = window.setInterval(() => {
+        current += increment;
+
+        if (current >= end) {
+          current = end;
+          clearProgressInterval();
+          setGenerationProgress(Math.max(0, Math.min(100, Math.floor(current))));
+          resolve();
+          return;
+        }
+
+        setGenerationProgress(Math.max(0, Math.min(100, Math.floor(current))));
+      }, tickMs);
+    });
+  };
+
+  const withProgress = async <T,>(
+    promise: Promise<T>,
+    opts: { start: number; end: number; message: string; minMs?: number },
+  ) => {
+    clearProgressInterval();
+    setGenerationStage(opts.message);
+    setGenerationProgress((p) => Math.max(p, opts.start));
+
+    const tickMs = 120;
+    progressIntervalRef.current = window.setInterval(() => {
+      setGenerationProgress((p) => {
+        if (p >= opts.end - 1) return p;
+        return p + 1;
+      });
+    }, tickMs);
+
+    const startedAt = Date.now();
+
+    try {
+      const result = await promise;
+      const minMs = opts.minMs ?? 900;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < minMs) {
+        await new Promise((r) => setTimeout(r, minMs - elapsed));
+      }
+      return result;
+    } finally {
+      clearProgressInterval();
+      setGenerationProgress((p) => Math.max(p, opts.end));
+    }
+  };
+
+  const normalizeMcqCorrectAnswer = (raw: unknown): string | undefined => {
+    if (raw === null || raw === undefined) return undefined;
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      return `option${Math.max(0, Math.min(3, raw))}`;
+    }
+    if (typeof raw !== 'string') return undefined;
+
+    const v = raw.trim();
+    if (!v) return undefined;
+    if (/^option[0-3]$/i.test(v)) return v.toLowerCase();
+
+    const letter = v.toUpperCase();
+    if (['A', 'B', 'C', 'D'].includes(letter)) {
+      return `option${letter.charCodeAt(0) - 65}`;
+    }
+
+    return undefined;
+  };
+
+  const parseQuestionsFromModel = (rawContent: string): any[] => {
+    let cleanContent = rawContent.trim();
+
+    // Remove DeepSeek reasoning blocks if they appear
+    cleanContent = cleanContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+    // Remove markdown code blocks
+    cleanContent = cleanContent.replace(/^```(?:json)?\s*/i, '');
+    cleanContent = cleanContent.replace(/\s*```$/i, '');
+    cleanContent = cleanContent.trim();
+
+    // Try to find the JSON array in the response (in case extra text slips in)
+    const jsonArrayMatch = cleanContent.match(/\[[\s\S]*\]/);
+    if (jsonArrayMatch) cleanContent = jsonArrayMatch[0];
+
+    const sanitize = (s: string) =>
+      s
+        .replace(/,\s*]/g, ']')
+        .replace(/,\s*}/g, '}')
+        .replace(/\r/g, '')
+        .replace(/\n/g, ' ');
+
+    const tryParse = (s: string) => {
+      const parsed = JSON.parse(sanitize(s));
+      if (!Array.isArray(parsed)) throw new Error('Response is not an array');
+      return parsed;
+    };
+
+    try {
+      return tryParse(cleanContent);
+    } catch {
+      // Fallback: tolerate single-quoted KEYS/VALUES (but avoid wrecking apostrophes inside words)
+      const relaxed = cleanContent
+        .replace(/([{,]\s*)'([^']+?)'\s*:/g, '$1"$2":')
+        .replace(/:\s*'([^']*?)'(\s*[},])/g, ': "$1"$2');
+      return tryParse(relaxed);
+    }
+  };
+
   const generateQuestions = async () => {
     if (!apiKeyConfigured) {
-      toast({ 
-        title: 'Configuration Error', 
-        description: 'OpenRouter API key is not configured in the database. Please contact your administrator.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Configuration Error',
+        description: 'OpenRouter API key is not configured in the database. Please contact your administrator.',
+        variant: 'destructive',
       });
       return;
     }
 
     if (marksExceed) {
-      toast({ 
-        title: 'Marks Exceeded', 
-        description: `Generated questions would use ${calculatedMarks} marks, but only ${availableMarks} are available.`, 
-        variant: 'destructive' 
+      toast({
+        title: 'Marks Exceeded',
+        description: `Generated questions would use ${calculatedMarks} marks, but only ${availableMarks} are available.`,
+        variant: 'destructive',
       });
       return;
     }
 
     const chapterContent = getSelectedChaptersContent();
     const chapterTitles = getSelectedChapterTitles();
-    
+
     if (!chapterContent.trim()) {
-      toast({ 
-        title: 'Error', 
-        description: 'No chapter content available. Please select chapters with content.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Error',
+        description: 'No chapter content available. Please select chapters with content.',
+        variant: 'destructive',
       });
       return;
     }
 
     if (totalQuestions === 0) {
-      toast({ 
-        title: 'Error', 
-        description: 'Please set at least one question to generate', 
-        variant: 'destructive' 
-      });
+      toast({ title: 'Error', description: 'Please set at least one question to generate', variant: 'destructive' });
       return;
     }
 
     setLoading(true);
     setGenerationProgress(0);
-    setStage('Preparing generation…', 5);
-
-    clearProgressInterval();
-    // Smooth “working” animation while waiting for the network
-    progressIntervalRef.current = window.setInterval(() => {
-      setGenerationProgress((p) => {
-        // drift slowly up to 55% while we wait
-        if (p >= 55) return p;
-        return p + 1;
-      });
-    }, 350);
+    setGenerationStage('');
 
     try {
-      setStage('Reading API configuration…', 10);
+      await simulateProgress(0, 18, 450, 'Preparing chapter content...');
+
       // Fetch API key from database
-      const configRef = ref(database, 'config/openrouterKey');
-      const snapshot = await get(configRef);
-      const apiKey = typeof snapshot.val() === 'string' ? snapshot.val().trim() : snapshot.val();
+      const apiKey = await withProgress(
+        (async () => {
+          try {
+            const configRef = ref(database, 'config/openrouterKey');
+            const snapshot = await get(configRef);
+            const raw = snapshot.val();
+            const key = typeof raw === 'string' ? raw.trim() : '';
 
-      if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-        throw new Error('API key not found in database configuration (config/openrouterKey).');
-      }
+            if (!key) {
+              throw new Error('API key not found in database configuration (config/openrouterKey).');
+            }
+            return key;
+          } catch (e: any) {
+            // Firebase often throws a "permission_denied" error here
+            const msg = typeof e?.message === 'string' ? e.message : '';
+            if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied')) {
+              throw new Error('Permission denied reading config/openrouterKey. Update your Firebase RTDB rules to allow teachers to read this path.');
+            }
+            throw e;
+          }
+        })(),
+        { start: 18, end: 28, message: 'Reading API configuration...', minMs: 250 },
+      );
 
-      setStage('Building prompt…', 18);
+      await simulateProgress(28, 35, 350, 'Building prompt...');
 
       const prompt = `You are an expert teacher creating questions for a test.
 
@@ -230,178 +352,163 @@ For Long Answer:
 
 OUTPUT ONLY THE JSON ARRAY:`;
 
-      setStage('Contacting AI…', 25);
+      // Call OpenRouter (keep the CURRENT model)
+      const data = await withProgress(
+        (async () => {
+          let response: Response | null = null;
+          let retryCount = 0;
+          const maxRetries = 3;
 
-      // Retry logic for API calls
-      let response: Response | null = null;
-      let retryCount = 0;
-      const maxRetries = 3;
+          while (retryCount < maxRetries) {
+            try {
+              response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${apiKey}`,
+                  Accept: 'application/json',
+                  'HTTP-Referer': window.location.origin,
+                  'X-Title': 'Nexus Learn Test Creator',
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: FIXED_MODEL,
+                  messages: [
+                    { role: 'system', content: 'You must return ONLY a valid JSON array. Do not include markdown or extra text.' },
+                    { role: 'user', content: prompt },
+                  ],
+                  temperature: 0.7,
+                  max_tokens: 3000,
+                }),
+              });
 
-      while (retryCount < maxRetries) {
-        try {
-          if (retryCount > 0) {
-            setStage(`Retrying request… (${retryCount}/${maxRetries - 1})`, 25);
-          }
+              if (response.ok) break;
 
-          response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              Accept: 'application/json',
-              'HTTP-Referer': window.location.origin,
-              'X-Title': 'Nexus Learn Test Creator',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              model: FIXED_MODEL,
-              messages: [{ role: 'user', content: prompt }],
-              temperature: 0.7,
-              max_tokens: 4000
-            })
-          });
-
-          if (response.ok) break;
-
-          // If rate limited or server error, retry after delay
-          if (response.status === 429 || response.status >= 500) {
-            retryCount++;
-            if (retryCount < maxRetries) {
+              // Retry rate limit / server errors
+              if (response.status === 429 || response.status >= 500) {
+                retryCount++;
+                if (retryCount < maxRetries) {
+                  await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
+                  continue;
+                }
+              }
+              break;
+            } catch (fetchError: any) {
+              retryCount++;
+              // Browser/CORS/network failures show up here as TypeError: Failed to fetch
+              if (retryCount >= maxRetries) {
+                const msg = typeof fetchError?.message === 'string' ? fetchError.message : '';
+                if (msg.toLowerCase().includes('failed to fetch')) {
+                  throw new Error('Network/CORS error calling OpenRouter. If this persists, OpenRouter is blocking browser requests and we will need a server-side proxy.');
+                }
+                throw fetchError;
+              }
               await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
-              continue;
             }
           }
-          break;
-        } catch (fetchError) {
-          retryCount++;
-          if (retryCount >= maxRetries) throw fetchError;
-          await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
-        }
-      }
 
-      setStage('Reading AI response…', 60);
+          if (!response || !response.ok) {
+            let errorPayload: any = null;
+            let rawText = '';
 
-      if (!response || !response.ok) {
-        let errorPayload: any = null;
-        let rawText = '';
+            if (response) {
+              rawText = await response.text().catch(() => '');
+              try {
+                errorPayload = rawText ? JSON.parse(rawText) : null;
+              } catch {
+                errorPayload = null;
+              }
+            }
 
-        if (response) {
-          rawText = await response.text().catch(() => '');
-          try {
-            errorPayload = rawText ? JSON.parse(rawText) : null;
-          } catch {
-            errorPayload = null;
+            const errorMessage =
+              errorPayload?.error?.message ||
+              (response?.status === 429
+                ? 'Rate limited. Please wait a moment and try again.'
+                : response?.status === 401
+                  ? 'Invalid API key. Please check the configuration.'
+                  : response?.status === 403
+                    ? 'Forbidden. Check API key permissions and your OpenRouter account limits.'
+                    : response?.status
+                      ? `API Error: ${response.status}${rawText ? ` — ${rawText.slice(0, 160)}` : ''}`
+                      : 'Network error');
+
+            throw new Error(errorMessage);
           }
-        }
 
-        console.error('OpenRouter error:', {
-          status: response?.status,
-          statusText: response?.statusText,
-          errorPayload,
-          rawText
-        });
+          return response.json();
+        })(),
+        { start: 35, end: 78, message: 'Generating questions...', minMs: 1200 },
+      );
 
-        const errorMessage =
-          errorPayload?.error?.message ||
-          (response?.status === 429
-            ? 'Rate limited. Please wait a moment and try again.'
-            : response?.status === 401
-              ? 'Invalid API key. Please check the configuration.'
-              : response?.status === 403
-                ? 'Forbidden. Check API key permissions and your OpenRouter account limits.'
-                : response?.status
-                  ? `API Error: ${response.status}`
-                  : 'Network error');
+      await simulateProgress(78, 85, 250, 'Parsing questions...');
 
-        throw new Error(errorMessage);
-      }
+      const content = data?.choices?.[0]?.message?.content as string | undefined;
+      if (!content) throw new Error('No response from AI. Please try again.');
 
-      setStage('Receiving response…', 60);
-
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
-
-      if (!content) {
-        throw new Error('No response from AI. Please try again.');
-      }
-
-      setStage('Parsing questions…', 75);
-
-      // Robust JSON parsing
-      let questions: any[];
+      let parsed: any[];
       try {
-        let cleanContent = content.trim();
-        
-        // Remove <think>...</think> tags if present (DeepSeek reasoning)
-        cleanContent = cleanContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-        
-        // Remove markdown code blocks
-        cleanContent = cleanContent.replace(/^```(?:json)?\s*/i, '');
-        cleanContent = cleanContent.replace(/\s*```$/i, '');
-        cleanContent = cleanContent.trim();
-        
-        // Try to find JSON array in the response
-        const jsonArrayMatch = cleanContent.match(/\[[\s\S]*\]/);
-        if (jsonArrayMatch) {
-          cleanContent = jsonArrayMatch[0];
-        }
-        
-        // Fix common JSON issues
-        cleanContent = cleanContent
-          .replace(/,\s*]/g, ']') // Remove trailing commas in arrays
-          .replace(/,\s*}/g, '}') // Remove trailing commas in objects
-          .replace(/'/g, '"') // Replace single quotes with double quotes
-          .replace(/\n/g, ' ') // Remove newlines
-          .replace(/\r/g, '') // Remove carriage returns
-          .replace(/\t/g, ' '); // Remove tabs
-        
-        questions = JSON.parse(cleanContent);
-        
-        if (!Array.isArray(questions)) {
-          throw new Error('Response is not an array');
-        }
+        parsed = parseQuestionsFromModel(content);
       } catch (parseError) {
         console.error('Parse error:', parseError, 'Content:', content);
-        throw new Error('Failed to parse AI response. The AI returned an invalid format. Please try again.');
+        throw new Error('Failed to parse AI response. Please try again.');
       }
 
-      // Validate and normalize each question
-      const validTypes = ['mcq', 'blank', 'short', 'long'];
+      // Validate and normalize each question (be forgiving to reduce failures)
       const generatedQuestions: Question[] = [];
-      
-      for (let i = 0; i < questions.length; i++) {
-        const q = questions[i];
-        
-        // Skip invalid questions
+      for (let i = 0; i < parsed.length; i++) {
+        const q = parsed[i];
         if (!q || typeof q !== 'object') continue;
-        if (!q.text || typeof q.text !== 'string') continue;
-        if (!q.type || !validTypes.includes(q.type)) continue;
-        
+
+        const rawType = typeof q.type === 'string' ? q.type.toLowerCase().trim() : '';
+        const type: Question['type'] | undefined =
+          rawType === 'mcq'
+            ? 'mcq'
+            : rawType === 'blank' || rawType === 'fillblank' || rawType === 'fill_blanks'
+              ? 'blank'
+              : rawType === 'short' || rawType === 'shortanswer'
+                ? 'short'
+                : rawType === 'long' || rawType === 'longanswer'
+                  ? 'long'
+                  : undefined;
+
+        const text = (
+          (typeof q.text === 'string' ? q.text : '') ||
+          (typeof (q as any).question === 'string' ? (q as any).question : '') ||
+          (typeof (q as any).sentence === 'string' ? (q as any).sentence : '')
+        ).trim();
+
+        if (!type || !text) continue;
+
+        const marksVal =
+          typeof q.marks === 'number'
+            ? q.marks
+            : typeof q.marks === 'string'
+              ? parseInt(q.marks, 10)
+              : NaN;
+
         const question: Question = {
           id: `ai-${Date.now()}-${i}`,
-          type: q.type,
-          text: q.text.trim(),
-          marks: typeof q.marks === 'number' ? q.marks : DEFAULT_MARKS[q.type as keyof typeof DEFAULT_MARKS] || 1
+          type,
+          text,
+          marks: Number.isFinite(marksVal)
+            ? marksVal
+            : DEFAULT_MARKS[type as keyof typeof DEFAULT_MARKS] || 1,
         };
-        
-        // Add options for MCQ
-        if (q.type === 'mcq') {
-          if (Array.isArray(q.options) && q.options.length >= 2) {
-            question.options = q.options.map((opt: any) => String(opt).trim()).filter(Boolean);
-            // Ensure we have at least 4 options
-            while (question.options.length < 4) {
-              question.options.push(`Option ${question.options.length + 1}`);
-            }
-          } else {
-            question.options = ['Option A', 'Option B', 'Option C', 'Option D'];
-          }
-          question.correctAnswer = q.correctAnswer || 'option0';
+
+        if (type === 'mcq') {
+          const rawOptions = Array.isArray(q.options) ? q.options : Array.isArray((q as any).choices) ? (q as any).choices : [];
+          const options = rawOptions.map((o: any) => String(o).trim()).filter(Boolean);
+          while (options.length < 4) options.push(`Option ${options.length + 1}`);
+          question.options = options.slice(0, 4);
+
+          const normalized = normalizeMcqCorrectAnswer((q as any).correctAnswer ?? (q as any).answer);
+          question.correctAnswer = normalized ?? 'option0';
         }
-        
-        // Add correct answer for fill in the blank
-        if (q.type === 'blank') {
-          question.correctAnswer = q.correctAnswer ? String(q.correctAnswer).trim() : '';
+
+        if (type === 'blank') {
+          const ans = (q.correctAnswer ?? (q as any).answer) as any;
+          question.correctAnswer = typeof ans === 'string' ? ans.trim() : ans !== undefined ? String(ans).trim() : '';
         }
-        
+
         generatedQuestions.push(question);
       }
 
@@ -409,29 +516,24 @@ OUTPUT ONLY THE JSON ARRAY:`;
         throw new Error('No valid questions were generated. Please try again.');
       }
 
-      setStage('Finalizing…', 95);
-      clearProgressInterval();
-      setGenerationProgress(100);
+      await simulateProgress(85, 100, 350, 'Finalizing and formatting questions...');
 
       onQuestionsGenerated(generatedQuestions);
-      toast({ 
-        title: 'Questions Generated!', 
-        description: `Successfully generated ${generatedQuestions.length} questions (${generatedQuestions.reduce((sum, q) => sum + q.marks, 0)} marks) from "${chapterTitles}".` 
+      toast({
+        title: 'Questions Generated!',
+        description: `Successfully generated ${generatedQuestions.length} questions (${generatedQuestions.reduce((sum, q) => sum + q.marks, 0)} marks) from "${chapterTitles}".`,
       });
       setOpen(false);
-
     } catch (error) {
       console.error('AI Generation Error:', error);
-      clearProgressInterval();
       toast({
-        title: 'Generation Failed',
+        title: 'Generation Error',
         description: error instanceof Error ? error.message : 'Failed to generate questions. Please try again.',
-        variant: 'destructive'
+        variant: 'destructive',
       });
     } finally {
       clearProgressInterval();
       setLoading(false);
-      // Keep the last progress value visible until dialog closes
     }
   };
 
