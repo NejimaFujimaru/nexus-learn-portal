@@ -179,7 +179,9 @@ ${blankCount > 0 ? `- ${blankCount} Fill in the Blank questions, ${blankMarks} m
 ${shortCount > 0 ? `- ${shortCount} Short Answer questions, ${shortMarks} mark(s) each` : ''}
 ${longCount > 0 ? `- ${longCount} Long Answer questions, ${longMarks} mark(s) each` : ''}
 
-Respond ONLY with a valid JSON array. Each question must follow this exact format:
+IMPORTANT: Respond ONLY with a valid JSON array. No markdown, no code blocks, no explanation, no thinking.
+
+Each question must follow this exact format:
 
 For MCQ:
 {"type": "mcq", "text": "Question text?", "options": ["Option A", "Option B", "Option C", "Option D"], "correctAnswer": "option0", "marks": ${mcqMarks}}
@@ -194,84 +196,155 @@ For Short Answer:
 For Long Answer:
 {"type": "long", "text": "Explain in detail...", "marks": ${longMarks}}
 
-Return ONLY the JSON array, no markdown code blocks, no explanation, no thinking process:`;
+OUTPUT ONLY THE JSON ARRAY:`;
 
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Nexus Learn Test Creator',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: FIXED_MODEL,
-          messages: [
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 4000
-        })
-      });
+      // Retry logic for API calls
+      let response: Response | null = null;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'HTTP-Referer': window.location.origin,
+              'X-Title': 'Nexus Learn Test Creator',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: FIXED_MODEL,
+              messages: [
+                { role: 'user', content: prompt }
+              ],
+              temperature: 0.7,
+              max_tokens: 4000
+            })
+          });
+          
+          if (response.ok) break;
+          
+          // If rate limited or server error, retry after delay
+          if (response.status === 429 || response.status >= 500) {
+            retryCount++;
+            if (retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+              continue;
+            }
+          }
+          break;
+        } catch (fetchError) {
+          retryCount++;
+          if (retryCount >= maxRetries) throw fetchError;
+          await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+        }
+      }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+      if (!response || !response.ok) {
+        const errorData = response ? await response.json().catch(() => ({})) : {};
         console.error('API Error Response:', errorData);
-        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+        const errorMessage = errorData.error?.message || 
+                           (response?.status === 429 ? 'Rate limited. Please wait a moment and try again.' : 
+                            response?.status === 401 ? 'Invalid API key. Please check the configuration.' :
+                            `API Error: ${response?.status || 'Network error'}`);
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
 
       if (!content) {
-        throw new Error('No response from AI');
+        throw new Error('No response from AI. Please try again.');
       }
 
-      // Parse the JSON response
+      // Robust JSON parsing
       let questions: any[];
       try {
-        // Clean the response - remove markdown code blocks and thinking if present
         let cleanContent = content.trim();
         
-        // Remove <think>...</think> tags if present
+        // Remove <think>...</think> tags if present (DeepSeek reasoning)
         cleanContent = cleanContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
         
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.slice(7);
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.slice(3);
-        }
-        if (cleanContent.endsWith('```')) {
-          cleanContent = cleanContent.slice(0, -3);
-        }
+        // Remove markdown code blocks
+        cleanContent = cleanContent.replace(/^```(?:json)?\s*/i, '');
+        cleanContent = cleanContent.replace(/\s*```$/i, '');
         cleanContent = cleanContent.trim();
         
-        // Try to extract JSON from the response
-        const jsonMatch = cleanContent.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          questions = JSON.parse(jsonMatch[0]);
-        } else {
-          questions = JSON.parse(cleanContent);
+        // Try to find JSON array in the response
+        const jsonArrayMatch = cleanContent.match(/\[[\s\S]*\]/);
+        if (jsonArrayMatch) {
+          cleanContent = jsonArrayMatch[0];
+        }
+        
+        // Fix common JSON issues
+        cleanContent = cleanContent
+          .replace(/,\s*]/g, ']') // Remove trailing commas in arrays
+          .replace(/,\s*}/g, '}') // Remove trailing commas in objects
+          .replace(/'/g, '"') // Replace single quotes with double quotes
+          .replace(/\n/g, ' ') // Remove newlines
+          .replace(/\r/g, '') // Remove carriage returns
+          .replace(/\t/g, ' '); // Remove tabs
+        
+        questions = JSON.parse(cleanContent);
+        
+        if (!Array.isArray(questions)) {
+          throw new Error('Response is not an array');
         }
       } catch (parseError) {
         console.error('Parse error:', parseError, 'Content:', content);
-        throw new Error('Failed to parse AI response. Please try again.');
+        throw new Error('Failed to parse AI response. The AI returned an invalid format. Please try again.');
       }
 
-      // Add IDs and validate marks
-      const generatedQuestions: Question[] = questions.map((q: any, index: number) => ({
-        id: `ai-${Date.now()}-${index}`,
-        type: q.type,
-        text: q.text,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-        marks: q.marks || DEFAULT_MARKS[q.type as keyof typeof DEFAULT_MARKS] || 1
-      }));
+      // Validate and normalize each question
+      const validTypes = ['mcq', 'blank', 'short', 'long'];
+      const generatedQuestions: Question[] = [];
+      
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
+        
+        // Skip invalid questions
+        if (!q || typeof q !== 'object') continue;
+        if (!q.text || typeof q.text !== 'string') continue;
+        if (!q.type || !validTypes.includes(q.type)) continue;
+        
+        const question: Question = {
+          id: `ai-${Date.now()}-${i}`,
+          type: q.type,
+          text: q.text.trim(),
+          marks: typeof q.marks === 'number' ? q.marks : DEFAULT_MARKS[q.type as keyof typeof DEFAULT_MARKS] || 1
+        };
+        
+        // Add options for MCQ
+        if (q.type === 'mcq') {
+          if (Array.isArray(q.options) && q.options.length >= 2) {
+            question.options = q.options.map((opt: any) => String(opt).trim()).filter(Boolean);
+            // Ensure we have at least 4 options
+            while (question.options.length < 4) {
+              question.options.push(`Option ${question.options.length + 1}`);
+            }
+          } else {
+            question.options = ['Option A', 'Option B', 'Option C', 'Option D'];
+          }
+          question.correctAnswer = q.correctAnswer || 'option0';
+        }
+        
+        // Add correct answer for fill in the blank
+        if (q.type === 'blank') {
+          question.correctAnswer = q.correctAnswer ? String(q.correctAnswer).trim() : '';
+        }
+        
+        generatedQuestions.push(question);
+      }
+
+      if (generatedQuestions.length === 0) {
+        throw new Error('No valid questions were generated. Please try again.');
+      }
 
       onQuestionsGenerated(generatedQuestions);
       toast({ 
         title: 'Questions Generated!', 
-        description: `Successfully generated ${generatedQuestions.length} questions (${calculatedMarks} marks) from "${chapterTitles}".` 
+        description: `Successfully generated ${generatedQuestions.length} questions (${generatedQuestions.reduce((sum, q) => sum + q.marks, 0)} marks) from "${chapterTitles}".` 
       });
       setOpen(false);
 
