@@ -249,6 +249,13 @@ const TestCreationWizard = () => {
     toast({ title: 'Question Removed', description: 'Question removed from test' });
   };
 
+  const clearAllQuestions = () => {
+    if (questions.length === 0) return;
+    setQuestions([]);
+    setExpandedQuestions([]);
+    toast({ title: 'All Questions Removed', description: 'All questions have been cleared from this test.' });
+  };
+
   const toggleExpanded = (id: string) => {
     setExpandedQuestions(prev => 
       prev.includes(id) ? prev.filter(q => q !== id) : [...prev, id]
@@ -611,8 +618,17 @@ const TestCreationWizard = () => {
             {/* Questions List */}
             {questions.length > 0 && (
               <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <CardTitle>Questions ({questions.length})</CardTitle>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={clearAllQuestions}
+                  >
+                    <Trash2 className="mr-2 h-3 w-3" />
+                    Delete All
+                  </Button>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {questions.map((question, index) => (

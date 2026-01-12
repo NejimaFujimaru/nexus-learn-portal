@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, RefreshCw, Brain } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
@@ -42,8 +42,15 @@ const DEFAULT_MARKS = {
   long: 5
 };
 
-// Fixed model from database config
-const FIXED_MODEL = 'tngtech/deepseek-r1t2-chimera:free';
+// Multi-model fallback sequence (all should be free-tier compatible on OpenRouter)
+const MODEL_CHAIN = [
+  'tngtech/deepseek-r1t2-chimera:free',
+  'deepseek/deepseek-chat',
+  'google/gemini-flash-1.5',
+  'openai/gpt-4o-mini',
+] as const;
+
+type ModelId = (typeof MODEL_CHAIN)[number];
 
 export const AIQuestionGenerator = ({
   selectedChapters,
@@ -220,15 +227,39 @@ export const AIQuestionGenerator = ({
     cleanContent = cleanContent.trim();
 
     // Try to find the JSON array in the response (in case extra text slips in)
-    const jsonArrayMatch = cleanContent.match(/\[[\s\S]*\]/);
-    if (jsonArrayMatch) cleanContent = jsonArrayMatch[0];
+    // 1) Direct top-level array
+    let jsonArrayMatch = cleanContent.match(/\[[\s\S]*\]/);
 
-    const sanitize = (s: string) =>
-      s
+    // 2) Or nested under a "questions" property
+    if (!jsonArrayMatch) {
+      const questionsMatch = cleanContent.match(/"questions"\s*:\s*(\[[\s\S]*\])/i);
+      if (questionsMatch) {
+        jsonArrayMatch = [questionsMatch[1]] as unknown as RegExpMatchArray;
+      }
+    }
+
+    if (jsonArrayMatch) {
+      cleanContent = jsonArrayMatch[0];
+    }
+
+    const sanitize = (s: string) => {
+      let result = s
+        // Normalize various quote styles
+        .replace(/[“”]/g, '"')
+        .replace(/[‘’]/g, "'")
+        // Remove obvious trailing commas
         .replace(/,\s*]/g, ']')
         .replace(/,\s*}/g, '}')
+        // Normalize whitespace
         .replace(/\r/g, '')
+        .replace(/\t/g, ' ')
+        .replace(/\u00A0/g, ' ')
         .replace(/\n/g, ' ');
+
+      // Collapse excessive spaces that models sometimes introduce in JSON
+      result = result.replace(/\s{2,}/g, ' ');
+      return result.trim();
+    };
 
     const tryParse = (s: string) => {
       const parsed = JSON.parse(sanitize(s));
@@ -317,7 +348,7 @@ export const AIQuestionGenerator = ({
 
       await simulateProgress(28, 35, 350, 'Building prompt...');
 
-      const prompt = `You are an expert teacher creating questions for a test.
+      const basePrompt = `You are an expert teacher creating questions for a test.
 
 SUBJECT: ${subjectName}
 CHAPTER(S): ${chapterTitles}
@@ -333,7 +364,7 @@ ${blankCount > 0 ? `- ${blankCount} Fill in the Blank questions, ${blankMarks} m
 ${shortCount > 0 ? `- ${shortCount} Short Answer questions, ${shortMarks} mark(s) each` : ''}
 ${longCount > 0 ? `- ${longCount} Long Answer questions, ${longMarks} mark(s) each` : ''}
 
-IMPORTANT: Respond ONLY with a valid JSON array. No markdown, no code blocks, no explanation, no thinking.
+IMPORTANT: Respond ONLY with a valid JSON array. No markdown, no code blocks, no explanation, no chain-of-thought, no reasoning tags.
 
 Each question must follow this exact format:
 
@@ -352,105 +383,146 @@ For Long Answer:
 
 OUTPUT ONLY THE JSON ARRAY:`;
 
-      // Call OpenRouter (keep the CURRENT model)
-      const data = await withProgress(
-        (async () => {
-          let response: Response | null = null;
-          let retryCount = 0;
-          const maxRetries = 3;
+      const strictSystemPrompts: Record<number, string> = {
+        0: 'You are a JSON generator. You must return ONLY a valid JSON array of questions. Do not include markdown, commentary, or any extra keys.',
+        1: 'Return ONLY a JSON array. If you include anything else (markdown, prose, XML, etc.), the user application will break.',
+        2: 'CRITICAL: Output must be a single JSON array. No code fences, no natural language, no reasoning.',
+        3: 'FINAL ATTEMPT: Respond with a bare JSON array following the described question schema. Any other format is considered failure.',
+      };
 
-          while (retryCount < maxRetries) {
-            try {
-              response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${apiKey}`,
-                  Accept: 'application/json',
-                  'HTTP-Referer': window.location.origin,
-                  'X-Title': 'Nexus Learn Test Creator',
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  model: FIXED_MODEL,
-                  messages: [
-                    { role: 'system', content: 'You must return ONLY a valid JSON array. Do not include markdown or extra text.' },
-                    { role: 'user', content: prompt },
-                  ],
-                  temperature: 0.7,
-                  max_tokens: 3000,
-                }),
-              });
+      const tryCallModel = async (model: ModelId, attemptIndex: number) => {
+        const systemMessage = strictSystemPrompts[attemptIndex] ?? strictSystemPrompts[3];
 
-              if (response.ok) break;
+        let response: Response | null = null;
+        let retryCount = 0;
+        const maxRetries = 3;
 
-              // Retry rate limit / server errors
-              if (response.status === 429 || response.status >= 500) {
-                retryCount++;
-                if (retryCount < maxRetries) {
-                  await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
-                  continue;
-                }
-              }
-              break;
-            } catch (fetchError: any) {
+        while (retryCount < maxRetries) {
+          try {
+            response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                Accept: 'application/json',
+                'HTTP-Referer': window.location.origin,
+                'X-Title': 'Nexus Learn Test Creator',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model,
+                messages: [
+                  { role: 'system', content: systemMessage },
+                  { role: 'user', content: basePrompt },
+                ],
+                temperature: 0.4,
+                max_tokens: 3000,
+              }),
+            });
+
+            if (response.ok) break;
+
+            // Retry rate limit / server errors
+            if (response.status === 429 || response.status >= 500) {
               retryCount++;
-              // Browser/CORS/network failures show up here as TypeError: Failed to fetch
-              if (retryCount >= maxRetries) {
-                const msg = typeof fetchError?.message === 'string' ? fetchError.message : '';
-                if (msg.toLowerCase().includes('failed to fetch')) {
-                  throw new Error('Network/CORS error calling OpenRouter. If this persists, OpenRouter is blocking browser requests and we will need a server-side proxy.');
-                }
-                throw fetchError;
+              if (retryCount < maxRetries) {
+                setStage(`Model ${attemptIndex + 1}: rate limited, retrying...`, 40 + retryCount * 5);
+                await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
+                continue;
               }
-              await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
+            }
+            break;
+          } catch (fetchError: any) {
+            retryCount++;
+            // Browser/CORS/network failures show up here as TypeError: Failed to fetch
+            if (retryCount >= maxRetries) {
+              const msg = typeof fetchError?.message === 'string' ? fetchError.message : '';
+              if (msg.toLowerCase().includes('failed to fetch')) {
+                throw new Error('Network/CORS error calling OpenRouter. If this persists, OpenRouter is blocking browser requests and we will need a server-side proxy.');
+              }
+              throw fetchError;
+            }
+            setStage(`Model ${attemptIndex + 1}: network issue, retrying...`, 40 + retryCount * 5);
+            await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
+          }
+        }
+
+        if (!response || !response.ok) {
+          let errorPayload: any = null;
+          let rawText = '';
+
+          if (response) {
+            rawText = await response.text().catch(() => '');
+            try {
+              errorPayload = rawText ? JSON.parse(rawText) : null;
+            } catch {
+              errorPayload = null;
             }
           }
 
-          if (!response || !response.ok) {
-            let errorPayload: any = null;
-            let rawText = '';
+          const errorMessage =
+            errorPayload?.error?.message ||
+            (response?.status === 429
+              ? 'Rate limited. Please wait a moment and try again.'
+              : response?.status === 401
+                ? 'Invalid API key. Please check the configuration.'
+                : response?.status === 403
+                  ? 'Forbidden. Check API key permissions and your OpenRouter account limits.'
+                  : response?.status
+                    ? `API Error: ${response.status}${rawText ? ` — ${rawText.slice(0, 160)}` : ''}`
+                    : 'Network error');
 
-            if (response) {
-              rawText = await response.text().catch(() => '');
+          throw new Error(errorMessage);
+        }
+
+        return response.json();
+      };
+
+      // Call OpenRouter with multi-model fallback and parse per-model
+      const parsed = await withProgress(
+        (async () => {
+          let lastError: any = null;
+
+          for (let i = 0; i < MODEL_CHAIN.length; i++) {
+            const model = MODEL_CHAIN[i];
+            try {
+              setStage(`Using AI model ${i + 1}/${MODEL_CHAIN.length}…`, 35 + i * 5);
+              const data = await tryCallModel(model, i);
+
+              const content =
+                (data?.choices?.[0]?.message?.content as string | undefined) ||
+                (typeof data?.choices?.[0]?.message === 'string'
+                  ? (data.choices[0].message as string)
+                  : undefined);
+
+              if (!content || !content.trim()) {
+                throw new Error('No response from AI. Please try again.');
+              }
+
               try {
-                errorPayload = rawText ? JSON.parse(rawText) : null;
-              } catch {
-                errorPayload = null;
+                const parsedForModel = parseQuestionsFromModel(content);
+                if (!Array.isArray(parsedForModel) || parsedForModel.length === 0) {
+                  throw new Error('No valid questions were generated.');
+                }
+                return parsedForModel;
+              } catch (parseError) {
+                console.error('Parse error for model', model, parseError, 'Content:', content);
+                throw new Error('Failed to parse AI response.');
+              }
+            } catch (err) {
+              console.warn(`Model ${model} failed`, err);
+              lastError = err;
+              if (i < MODEL_CHAIN.length - 1) {
+                setStage('Retrying with backup AI model…', 45 + i * 5);
               }
             }
-
-            const errorMessage =
-              errorPayload?.error?.message ||
-              (response?.status === 429
-                ? 'Rate limited. Please wait a moment and try again.'
-                : response?.status === 401
-                  ? 'Invalid API key. Please check the configuration.'
-                  : response?.status === 403
-                    ? 'Forbidden. Check API key permissions and your OpenRouter account limits.'
-                    : response?.status
-                      ? `API Error: ${response.status}${rawText ? ` — ${rawText.slice(0, 160)}` : ''}`
-                      : 'Network error');
-
-            throw new Error(errorMessage);
           }
 
-          return response.json();
+          throw lastError || new Error('All AI models failed to generate questions. Please try again.');
         })(),
-        { start: 35, end: 78, message: 'Generating questions...', minMs: 1200 },
+        { start: 35, end: 78, message: 'Generating questions with AI…', minMs: 1600 },
       );
 
-      await simulateProgress(78, 85, 250, 'Parsing questions...');
-
-      const content = data?.choices?.[0]?.message?.content as string | undefined;
-      if (!content) throw new Error('No response from AI. Please try again.');
-
-      let parsed: any[];
-      try {
-        parsed = parseQuestionsFromModel(content);
-      } catch (parseError) {
-        console.error('Parse error:', parseError, 'Content:', content);
-        throw new Error('Failed to parse AI response. Please try again.');
-      }
+      await simulateProgress(78, 85, 300, 'Parsing questions...');
 
       // Validate and normalize each question (be forgiving to reduce failures)
       const generatedQuestions: Question[] = [];
@@ -601,27 +673,42 @@ OUTPUT ONLY THE JSON ARRAY:`;
             </Alert>
           )}
 
-          {/* Question Counts with Number Inputs */}
+          {/* Question Counts with Number Inputs and Marks per Type */}
           <div className="space-y-3 sm:space-y-4">
-            <Label className="text-sm font-medium">Number of Questions by Type</Label>
+            <Label className="text-sm font-medium">Question Types & Marks</Label>
+            <p className="text-xs text-muted-foreground">
+              Set how many questions you want for each type and how many marks each question should carry.
+            </p>
             
             <div className="grid gap-3">
               {/* MCQ */}
               <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
                 <div className="flex-1">
-                  <span className="text-xs sm:text-sm font-medium">Multiple Choice (MCQ)</span>
-                  <div className="text-xs text-muted-foreground">{mcqMarks} mark each</div>
+                  <span className="text-xs sm:text-sm font-medium flex items-center gap-1">
+                    <Brain className="h-3 w-3 text-primary" /> Multiple Choice (MCQ)
+                  </span>
+                  <div className="text-xs text-muted-foreground">{mcqMarks} mark(s) each</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Input
+                    aria-label="MCQ marks per question"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={mcqMarks}
+                    onChange={(e) => setMcqMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                    className="w-16 h-8 text-center text-xs sm:text-sm"
+                  />
+                  <Input
+                    aria-label="MCQ question count"
                     type="number"
                     min={0}
                     max={20}
                     value={mcqCount}
                     onChange={(e) => handleCountChange(setMcqCount, e.target.value)}
-                    className="w-16 h-8 text-center text-sm"
+                    className="w-16 h-8 text-center text-xs sm:text-sm"
                   />
-                  <span className="text-xs text-muted-foreground w-16">= {mcqCount * mcqMarks} marks</span>
+                  <span className="text-xs text-muted-foreground w-20 text-right">= {mcqCount * mcqMarks} marks</span>
                 </div>
               </div>
 
@@ -629,18 +716,28 @@ OUTPUT ONLY THE JSON ARRAY:`;
               <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
                 <div className="flex-1">
                   <span className="text-xs sm:text-sm font-medium">Fill in the Blank</span>
-                  <div className="text-xs text-muted-foreground">{blankMarks} mark each</div>
+                  <div className="text-xs text-muted-foreground">{blankMarks} mark(s) each</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Input
+                    aria-label="Blank marks per question"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={blankMarks}
+                    onChange={(e) => setBlankMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                    className="w-16 h-8 text-center text-xs sm:text-sm"
+                  />
+                  <Input
+                    aria-label="Blank question count"
                     type="number"
                     min={0}
                     max={20}
                     value={blankCount}
                     onChange={(e) => handleCountChange(setBlankCount, e.target.value)}
-                    className="w-16 h-8 text-center text-sm"
+                    className="w-16 h-8 text-center text-xs sm:text-sm"
                   />
-                  <span className="text-xs text-muted-foreground w-16">= {blankCount * blankMarks} marks</span>
+                  <span className="text-xs text-muted-foreground w-20 text-right">= {blankCount * blankMarks} marks</span>
                 </div>
               </div>
 
@@ -648,18 +745,28 @@ OUTPUT ONLY THE JSON ARRAY:`;
               <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
                 <div className="flex-1">
                   <span className="text-xs sm:text-sm font-medium">Short Answer</span>
-                  <div className="text-xs text-muted-foreground">{shortMarks} marks each</div>
+                  <div className="text-xs text-muted-foreground">{shortMarks} mark(s) each</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Input
+                    aria-label="Short answer marks per question"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={shortMarks}
+                    onChange={(e) => setShortMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                    className="w-16 h-8 text-center text-xs sm:text-sm"
+                  />
+                  <Input
+                    aria-label="Short answer question count"
                     type="number"
                     min={0}
                     max={20}
                     value={shortCount}
                     onChange={(e) => handleCountChange(setShortCount, e.target.value)}
-                    className="w-16 h-8 text-center text-sm"
+                    className="w-16 h-8 text-center text-xs sm:text-sm"
                   />
-                  <span className="text-xs text-muted-foreground w-16">= {shortCount * shortMarks} marks</span>
+                  <span className="text-xs text-muted-foreground w-20 text-right">= {shortCount * shortMarks} marks</span>
                 </div>
               </div>
 
@@ -667,18 +774,28 @@ OUTPUT ONLY THE JSON ARRAY:`;
               <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
                 <div className="flex-1">
                   <span className="text-xs sm:text-sm font-medium">Long Answer</span>
-                  <div className="text-xs text-muted-foreground">{longMarks} marks each</div>
+                  <div className="text-xs text-muted-foreground">{longMarks} mark(s) each</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Input
+                    aria-label="Long answer marks per question"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={longMarks}
+                    onChange={(e) => setLongMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                    className="w-16 h-8 text-center text-xs sm:text-sm"
+                  />
+                  <Input
+                    aria-label="Long answer question count"
                     type="number"
                     min={0}
                     max={20}
                     value={longCount}
                     onChange={(e) => handleCountChange(setLongCount, e.target.value)}
-                    className="w-16 h-8 text-center text-sm"
+                    className="w-16 h-8 text-center text-xs sm:text-sm"
                   />
-                  <span className="text-xs text-muted-foreground w-16">= {longCount * longMarks} marks</span>
+                  <span className="text-xs text-muted-foreground w-20 text-right">= {longCount * longMarks} marks</span>
                 </div>
               </div>
             </div>
