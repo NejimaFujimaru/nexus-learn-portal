@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, RefreshCw, Brain } from 'lucide-react';
+import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, Brain, Star, Zap, PartyPopper } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
@@ -52,6 +52,122 @@ const MODEL_CHAIN = [
 
 type ModelId = (typeof MODEL_CHAIN)[number];
 
+// Animated Star Component
+const AnimatedStar = ({ delay, size, left, top }: { delay: number; size: number; left: string; top: string }) => (
+  <div
+    className="absolute animate-pulse"
+    style={{
+      left,
+      top,
+      animationDelay: `${delay}ms`,
+      animationDuration: `${1500 + Math.random() * 1000}ms`,
+    }}
+  >
+    <Star 
+      className="text-primary/60" 
+      style={{ 
+        width: size, 
+        height: size,
+        filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.5))'
+      }} 
+      fill="currentColor"
+    />
+  </div>
+);
+
+// Galaxy Animation Component
+const GalaxyAnimation = ({ stage }: { stage: string }) => {
+  const stars = useMemo(() => 
+    Array.from({ length: 20 }, (_, i) => ({
+      id: i,
+      delay: i * 150,
+      size: 8 + Math.random() * 16,
+      left: `${5 + Math.random() * 90}%`,
+      top: `${5 + Math.random() * 90}%`,
+    })), []
+  );
+
+  return (
+    <div className="relative w-full h-48 sm:h-64 bg-gradient-to-br from-primary/5 via-background to-primary/10 rounded-xl overflow-hidden border border-primary/20">
+      {/* Rotating glow */}
+      <div 
+        className="absolute inset-0 opacity-30"
+        style={{
+          background: 'radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.4) 0%, transparent 50%)',
+          animation: 'pulse 2s ease-in-out infinite',
+        }}
+      />
+      
+      {/* Stars */}
+      {stars.map((star) => (
+        <AnimatedStar key={star.id} {...star} />
+      ))}
+      
+      {/* Center icon */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="relative">
+          <div 
+            className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse"
+            style={{ width: 80, height: 80, margin: -16 }}
+          />
+          <Sparkles 
+            className="w-12 h-12 text-primary animate-pulse" 
+            style={{ filter: 'drop-shadow(0 0 12px hsl(var(--primary) / 0.6))' }}
+          />
+        </div>
+      </div>
+      
+      {/* Stage text */}
+      <div className="absolute bottom-4 left-0 right-0 text-center">
+        <p className="text-sm font-medium text-primary animate-pulse">{stage || 'Preparing...'}</p>
+      </div>
+    </div>
+  );
+};
+
+// Completion Animation Component
+const CompletionAnimation = ({ questionCount, totalMarks }: { questionCount: number; totalMarks: number }) => (
+  <div className="relative w-full py-8 flex flex-col items-center justify-center space-y-4 animate-scale-in">
+    <div className="relative">
+      <div 
+        className="absolute inset-0 bg-green-500/20 rounded-full blur-2xl animate-pulse"
+        style={{ width: 120, height: 120, margin: -24 }}
+      />
+      <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center border-2 border-green-500">
+        <CheckCircle2 className="w-10 h-10 text-green-500" />
+      </div>
+    </div>
+    
+    <div className="text-center space-y-2">
+      <div className="flex items-center justify-center gap-2">
+        <PartyPopper className="w-5 h-5 text-primary" />
+        <h3 className="text-xl font-bold text-foreground">Generation Complete!</h3>
+        <PartyPopper className="w-5 h-5 text-primary" />
+      </div>
+      <p className="text-muted-foreground">
+        Successfully generated <span className="font-semibold text-primary">{questionCount} questions</span>
+      </p>
+      <p className="text-sm text-muted-foreground">
+        Total marks: <span className="font-medium">{totalMarks}</span>
+      </p>
+    </div>
+    
+    {/* Decorative elements */}
+    <div className="absolute top-2 left-4">
+      <Zap className="w-4 h-4 text-yellow-500 animate-pulse" />
+    </div>
+    <div className="absolute top-8 right-6">
+      <Star className="w-3 h-3 text-primary animate-pulse" fill="currentColor" />
+    </div>
+    <div className="absolute bottom-4 left-8">
+      <Star className="w-4 h-4 text-primary/60 animate-pulse" fill="currentColor" />
+    </div>
+    <div className="absolute bottom-6 right-4">
+      <Zap className="w-3 h-3 text-yellow-500/60 animate-pulse" />
+    </div>
+  </div>
+);
+
 export const AIQuestionGenerator = ({
   selectedChapters,
   chapters,
@@ -64,11 +180,16 @@ export const AIQuestionGenerator = ({
   const [loading, setLoading] = useState(false);
   const [configLoading, setConfigLoading] = useState(true);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  
+  // View state: 'config' | 'generating' | 'complete'
+  const [viewState, setViewState] = useState<'config' | 'generating' | 'complete'>('config');
+  const [generatedResults, setGeneratedResults] = useState<{ count: number; marks: number } | null>(null);
 
   // UI progress
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStage, setGenerationStage] = useState<string>('');
   const progressIntervalRef = useRef<number | null>(null);
+  
   // Question counts
   const [mcqCount, setMcqCount] = useState(5);
   const [blankCount, setBlankCount] = useState(5);
@@ -80,6 +201,16 @@ export const AIQuestionGenerator = ({
   const [blankMarks, setBlankMarks] = useState(DEFAULT_MARKS.blank);
   const [shortMarks, setShortMarks] = useState(DEFAULT_MARKS.short);
   const [longMarks, setLongMarks] = useState(DEFAULT_MARKS.long);
+
+  // Reset view when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setViewState('config');
+      setGeneratedResults(null);
+      setGenerationProgress(0);
+      setGenerationStage('');
+    }
+  }, [open]);
 
   // Check if API key is configured in database
   useEffect(() => {
@@ -245,8 +376,8 @@ export const AIQuestionGenerator = ({
     const sanitize = (s: string) => {
       let result = s
         // Normalize various quote styles
-        .replace(/[“”]/g, '"')
-        .replace(/[‘’]/g, "'")
+        .replace(/[""]/g, '"')
+        .replace(/['']/g, "'")
         // Remove obvious trailing commas
         .replace(/,\s*]/g, ']')
         .replace(/,\s*}/g, '}')
@@ -314,6 +445,8 @@ export const AIQuestionGenerator = ({
       return;
     }
 
+    // Transition to generating view
+    setViewState('generating');
     setLoading(true);
     setGenerationProgress(0);
     setGenerationStage('');
@@ -335,7 +468,6 @@ export const AIQuestionGenerator = ({
             }
             return key;
           } catch (e: any) {
-            // Firebase often throws a "permission_denied" error here
             const msg = typeof e?.message === 'string' ? e.message : '';
             if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied')) {
               throw new Error('Permission denied reading config/openrouterKey. Update your Firebase RTDB rules to allow teachers to read this path.');
@@ -433,7 +565,6 @@ OUTPUT ONLY THE JSON ARRAY:`;
             break;
           } catch (fetchError: any) {
             retryCount++;
-            // Browser/CORS/network failures show up here as TypeError: Failed to fetch
             if (retryCount >= maxRetries) {
               const msg = typeof fetchError?.message === 'string' ? fetchError.message : '';
               if (msg.toLowerCase().includes('failed to fetch')) {
@@ -588,16 +719,29 @@ OUTPUT ONLY THE JSON ARRAY:`;
         throw new Error('No valid questions were generated. Please try again.');
       }
 
-      await simulateProgress(85, 100, 350, 'Finalizing and formatting questions...');
+      await simulateProgress(85, 100, 350, 'Finalizing questions...');
 
+      // Store results and show completion
+      const totalGeneratedMarks = generatedQuestions.reduce((sum, q) => sum + q.marks, 0);
+      setGeneratedResults({ count: generatedQuestions.length, marks: totalGeneratedMarks });
+      setViewState('complete');
+      
+      // Send questions to parent
       onQuestionsGenerated(generatedQuestions);
+      
       toast({
         title: 'Questions Generated!',
-        description: `Successfully generated ${generatedQuestions.length} questions (${generatedQuestions.reduce((sum, q) => sum + q.marks, 0)} marks) from "${chapterTitles}".`,
+        description: `Successfully generated ${generatedQuestions.length} questions (${totalGeneratedMarks} marks) from "${chapterTitles}".`,
       });
-      setOpen(false);
+      
+      // Auto-close after showing completion
+      setTimeout(() => {
+        setOpen(false);
+      }, 2500);
+      
     } catch (error) {
       console.error('AI Generation Error:', error);
+      setViewState('config'); // Go back to config on error
       toast({
         title: 'Generation Error',
         description: error instanceof Error ? error.message : 'Failed to generate questions. Please try again.',
@@ -629,243 +773,282 @@ OUTPUT ONLY THE JSON ARRAY:`;
             AI Question Generator
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
-            Generate questions automatically from your chapter content using AI.
+            {viewState === 'config' && 'Configure your question generation settings.'}
+            {viewState === 'generating' && 'Generating questions using AI...'}
+            {viewState === 'complete' && 'Questions have been generated successfully!'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
-          {/* API Configuration Status */}
-          {configLoading ? (
-            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Checking configuration...</span>
-            </div>
-          ) : apiKeyConfigured ? (
-            <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="text-sm text-green-700 dark:text-green-400">AI service configured and ready</span>
-            </div>
-          ) : (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-xs sm:text-sm">
-                AI service not configured. Please add the API key to the database at <code className="bg-muted px-1 rounded">config/openrouterKey</code>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Chapter Info */}
-          {selectedChapters.length === 0 ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-xs sm:text-sm">
-                Please select at least one chapter in Step 1 to generate questions.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <Alert>
-              <AlertDescription className="text-xs sm:text-sm">
-                Generating from <strong>{selectedChapters.length}</strong> chapter(s) in <strong>{subjectName}</strong>
-                <div className="mt-1 text-muted-foreground text-xs">
-                  {getSelectedChapterTitles()}
+        {/* Config View */}
+        <div 
+          className={`transition-all duration-500 ease-out ${
+            viewState === 'config' 
+              ? 'opacity-100 translate-x-0' 
+              : 'opacity-0 -translate-x-full absolute pointer-events-none'
+          }`}
+        >
+          {viewState === 'config' && (
+            <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
+              {/* API Configuration Status */}
+              {configLoading ? (
+                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Checking configuration...</span>
                 </div>
-              </AlertDescription>
-            </Alert>
-          )}
+              ) : apiKeyConfigured ? (
+                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-sm text-green-700 dark:text-green-400">AI service configured and ready</span>
+                </div>
+              ) : (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-xs sm:text-sm">
+                    AI service not configured. Please add the API key to the database at <code className="bg-muted px-1 rounded">config/openrouterKey</code>
+                  </AlertDescription>
+                </Alert>
+              )}
 
-          {/* Question Counts with Number Inputs and Marks per Type */}
-          <div className="space-y-3 sm:space-y-4">
-            <Label className="text-sm font-medium">Question Types & Marks</Label>
-            <p className="text-xs text-muted-foreground">
-              Set how many questions you want for each type and how many marks each question should carry.
-            </p>
-            
-            <div className="grid gap-3">
-              {/* MCQ */}
-              <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
-                <div className="flex-1">
-                  <span className="text-xs sm:text-sm font-medium flex items-center gap-1">
-                    <Brain className="h-3 w-3 text-primary" /> Multiple Choice (MCQ)
+              {/* Chapter Info */}
+              {selectedChapters.length === 0 ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-xs sm:text-sm">
+                    Please select at least one chapter in Step 1 to generate questions.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert>
+                  <AlertDescription className="text-xs sm:text-sm">
+                    Generating from <strong>{selectedChapters.length}</strong> chapter(s) in <strong>{subjectName}</strong>
+                    <div className="mt-1 text-muted-foreground text-xs">
+                      {getSelectedChapterTitles()}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Question Counts with Number Inputs and Marks per Type */}
+              <div className="space-y-3 sm:space-y-4">
+                <Label className="text-sm font-medium">Question Types & Marks</Label>
+                <p className="text-xs text-muted-foreground">
+                  Set how many questions you want for each type and how many marks each question should carry.
+                </p>
+                
+                <div className="grid gap-3">
+                  {/* MCQ */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-1">
+                      <span className="text-xs sm:text-sm font-medium flex items-center gap-1">
+                        <Brain className="h-3 w-3 text-primary" /> Multiple Choice (MCQ)
+                      </span>
+                      <div className="text-xs text-muted-foreground">{mcqMarks} mark(s) each</div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Input
+                        aria-label="MCQ marks per question"
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={mcqMarks}
+                        onChange={(e) => setMcqMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                        className="w-14 sm:w-16 h-8 text-center text-xs sm:text-sm"
+                      />
+                      <Input
+                        aria-label="MCQ question count"
+                        type="number"
+                        min={0}
+                        max={20}
+                        value={mcqCount}
+                        onChange={(e) => handleCountChange(setMcqCount, e.target.value)}
+                        className="w-14 sm:w-16 h-8 text-center text-xs sm:text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground w-16 sm:w-20 text-right">= {mcqCount * mcqMarks} marks</span>
+                    </div>
+                  </div>
+
+                  {/* Fill in the Blank */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-1">
+                      <span className="text-xs sm:text-sm font-medium">Fill in the Blank</span>
+                      <div className="text-xs text-muted-foreground">{blankMarks} mark(s) each</div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Input
+                        aria-label="Blank marks per question"
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={blankMarks}
+                        onChange={(e) => setBlankMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                        className="w-14 sm:w-16 h-8 text-center text-xs sm:text-sm"
+                      />
+                      <Input
+                        aria-label="Blank question count"
+                        type="number"
+                        min={0}
+                        max={20}
+                        value={blankCount}
+                        onChange={(e) => handleCountChange(setBlankCount, e.target.value)}
+                        className="w-14 sm:w-16 h-8 text-center text-xs sm:text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground w-16 sm:w-20 text-right">= {blankCount * blankMarks} marks</span>
+                    </div>
+                  </div>
+
+                  {/* Short Answer */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-1">
+                      <span className="text-xs sm:text-sm font-medium">Short Answer</span>
+                      <div className="text-xs text-muted-foreground">{shortMarks} mark(s) each</div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Input
+                        aria-label="Short answer marks per question"
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={shortMarks}
+                        onChange={(e) => setShortMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                        className="w-14 sm:w-16 h-8 text-center text-xs sm:text-sm"
+                      />
+                      <Input
+                        aria-label="Short answer question count"
+                        type="number"
+                        min={0}
+                        max={20}
+                        value={shortCount}
+                        onChange={(e) => handleCountChange(setShortCount, e.target.value)}
+                        className="w-14 sm:w-16 h-8 text-center text-xs sm:text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground w-16 sm:w-20 text-right">= {shortCount * shortMarks} marks</span>
+                    </div>
+                  </div>
+
+                  {/* Long Answer */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-1">
+                      <span className="text-xs sm:text-sm font-medium">Long Answer</span>
+                      <div className="text-xs text-muted-foreground">{longMarks} mark(s) each</div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Input
+                        aria-label="Long answer marks per question"
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={longMarks}
+                        onChange={(e) => setLongMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                        className="w-14 sm:w-16 h-8 text-center text-xs sm:text-sm"
+                      />
+                      <Input
+                        aria-label="Long answer question count"
+                        type="number"
+                        min={0}
+                        max={20}
+                        value={longCount}
+                        onChange={(e) => handleCountChange(setLongCount, e.target.value)}
+                        className="w-14 sm:w-16 h-8 text-center text-xs sm:text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground w-16 sm:w-20 text-right">= {longCount * longMarks} marks</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mark Calculation Summary */}
+              <div className="p-3 sm:p-4 border rounded-lg space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Total Questions:</span>
+                  <span className="font-medium">{totalQuestions}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Marks to Generate:</span>
+                  <span className={`font-medium ${marksExceed ? 'text-destructive' : 'text-green-600'}`}>
+                    {calculatedMarks}
                   </span>
-                  <div className="text-xs text-muted-foreground">{mcqMarks} mark(s) each</div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    aria-label="MCQ marks per question"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={mcqMarks}
-                    onChange={(e) => setMcqMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                    className="w-16 h-8 text-center text-xs sm:text-sm"
-                  />
-                  <Input
-                    aria-label="MCQ question count"
-                    type="number"
-                    min={0}
-                    max={20}
-                    value={mcqCount}
-                    onChange={(e) => handleCountChange(setMcqCount, e.target.value)}
-                    className="w-16 h-8 text-center text-xs sm:text-sm"
-                  />
-                  <span className="text-xs text-muted-foreground w-20 text-right">= {mcqCount * mcqMarks} marks</span>
+                <div className="flex justify-between text-sm">
+                  <span>Available Marks:</span>
+                  <span className="font-medium">{availableMarks} / {totalMarks}</span>
+                </div>
+                <div className="flex justify-between text-sm border-t pt-2">
+                  <span>After Generation:</span>
+                  <span className={`font-bold ${marksExceed ? 'text-destructive' : ''}`}>
+                    {currentQuestionMarks + calculatedMarks} / {totalMarks}
+                  </span>
                 </div>
               </div>
 
-              {/* Fill in the Blank */}
-              <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
-                <div className="flex-1">
-                  <span className="text-xs sm:text-sm font-medium">Fill in the Blank</span>
-                  <div className="text-xs text-muted-foreground">{blankMarks} mark(s) each</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    aria-label="Blank marks per question"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={blankMarks}
-                    onChange={(e) => setBlankMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                    className="w-16 h-8 text-center text-xs sm:text-sm"
-                  />
-                  <Input
-                    aria-label="Blank question count"
-                    type="number"
-                    min={0}
-                    max={20}
-                    value={blankCount}
-                    onChange={(e) => handleCountChange(setBlankCount, e.target.value)}
-                    className="w-16 h-8 text-center text-xs sm:text-sm"
-                  />
-                  <span className="text-xs text-muted-foreground w-20 text-right">= {blankCount * blankMarks} marks</span>
-                </div>
-              </div>
+              {/* Warning if marks exceed */}
+              {marksExceed && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs sm:text-sm">
+                    <strong>Marks exceeded!</strong> Reduce the number of questions or their marks. 
+                    You need to remove {calculatedMarks - availableMarks} marks.
+                  </AlertDescription>
+                </Alert>
+              )}
 
-              {/* Short Answer */}
-              <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
-                <div className="flex-1">
-                  <span className="text-xs sm:text-sm font-medium">Short Answer</span>
-                  <div className="text-xs text-muted-foreground">{shortMarks} mark(s) each</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    aria-label="Short answer marks per question"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={shortMarks}
-                    onChange={(e) => setShortMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                    className="w-16 h-8 text-center text-xs sm:text-sm"
-                  />
-                  <Input
-                    aria-label="Short answer question count"
-                    type="number"
-                    min={0}
-                    max={20}
-                    value={shortCount}
-                    onChange={(e) => handleCountChange(setShortCount, e.target.value)}
-                    className="w-16 h-8 text-center text-xs sm:text-sm"
-                  />
-                  <span className="text-xs text-muted-foreground w-20 text-right">= {shortCount * shortMarks} marks</span>
-                </div>
-              </div>
-
-              {/* Long Answer */}
-              <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 rounded-lg">
-                <div className="flex-1">
-                  <span className="text-xs sm:text-sm font-medium">Long Answer</span>
-                  <div className="text-xs text-muted-foreground">{longMarks} mark(s) each</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    aria-label="Long answer marks per question"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={longMarks}
-                    onChange={(e) => setLongMarks(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                    className="w-16 h-8 text-center text-xs sm:text-sm"
-                  />
-                  <Input
-                    aria-label="Long answer question count"
-                    type="number"
-                    min={0}
-                    max={20}
-                    value={longCount}
-                    onChange={(e) => handleCountChange(setLongCount, e.target.value)}
-                    className="w-16 h-8 text-center text-xs sm:text-sm"
-                  />
-                  <span className="text-xs text-muted-foreground w-20 text-right">= {longCount * longMarks} marks</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Mark Calculation Summary */}
-          <div className="p-4 border rounded-lg space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Total Questions:</span>
-              <span className="font-medium">{totalQuestions}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Marks to Generate:</span>
-              <span className={`font-medium ${marksExceed ? 'text-destructive' : 'text-green-600'}`}>
-                {calculatedMarks}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Available Marks:</span>
-              <span className="font-medium">{availableMarks} / {totalMarks}</span>
-            </div>
-            <div className="flex justify-between text-sm border-t pt-2">
-              <span>After Generation:</span>
-              <span className={`font-bold ${marksExceed ? 'text-destructive' : ''}`}>
-                {currentQuestionMarks + calculatedMarks} / {totalMarks}
-              </span>
-            </div>
-          </div>
-
-          {/* Warning if marks exceed */}
-          {marksExceed && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription className="text-xs sm:text-sm">
-                <strong>Marks exceeded!</strong> Reduce the number of questions or their marks. 
-                You need to remove {calculatedMarks - availableMarks} marks.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Generation Progress */}
-          {loading && (
-            <div className="space-y-2 animate-fade-in">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{generationStage || 'Generating…'}</span>
-                <span>{generationProgress}%</span>
-              </div>
-              <Progress value={generationProgress} className="h-2" />
-            </div>
-          )}
-
-          {/* Generate Button */}
-          <Button 
-            onClick={generateQuestions} 
-            disabled={loading || !apiKeyConfigured || selectedChapters.length === 0 || totalQuestions === 0 || marksExceed}
-            className="w-full"
-            size="sm"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                <span className="text-xs sm:text-sm">Generating {totalQuestions} Questions...</span>
-              </>
-            ) : (
-              <>
+              {/* Generate Button */}
+              <Button 
+                onClick={generateQuestions} 
+                disabled={loading || !apiKeyConfigured || selectedChapters.length === 0 || totalQuestions === 0 || marksExceed}
+                className="w-full"
+                size="sm"
+              >
                 <Sparkles className="mr-2 h-4 w-4" />
                 <span className="text-xs sm:text-sm">Generate {totalQuestions} Questions ({calculatedMarks} marks)</span>
-              </>
-            )}
-          </Button>
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Generating View */}
+        <div 
+          className={`transition-all duration-500 ease-out ${
+            viewState === 'generating' 
+              ? 'opacity-100 translate-x-0' 
+              : viewState === 'complete'
+                ? 'opacity-0 -translate-x-full absolute pointer-events-none'
+                : 'opacity-0 translate-x-full absolute pointer-events-none'
+          }`}
+        >
+          {viewState === 'generating' && (
+            <div className="space-y-6 py-4">
+              {/* Galaxy Animation */}
+              <GalaxyAnimation stage={generationStage} />
+              
+              {/* Progress Bar */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{generationStage || 'Initializing...'}</span>
+                  <span className="font-medium text-primary">{generationProgress}%</span>
+                </div>
+                <Progress value={generationProgress} className="h-3" />
+                <p className="text-xs text-center text-muted-foreground">
+                  Generating {totalQuestions} questions • {calculatedMarks} total marks
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Complete View */}
+        <div 
+          className={`transition-all duration-500 ease-out ${
+            viewState === 'complete' 
+              ? 'opacity-100 scale-100' 
+              : 'opacity-0 scale-95 absolute pointer-events-none'
+          }`}
+        >
+          {viewState === 'complete' && generatedResults && (
+            <CompletionAnimation 
+              questionCount={generatedResults.count} 
+              totalMarks={generatedResults.marks} 
+            />
+          )}
         </div>
       </DialogContent>
     </Dialog>
