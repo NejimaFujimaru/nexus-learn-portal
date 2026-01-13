@@ -150,6 +150,7 @@ const TestCreationWizard = () => {
 
   const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
   const hasChapters = subjectChapters.length > 0;
+  // Progress: 0% at step 1, 50% at step 2, 100% at step 3
   const progressPercentage = ((currentStep - 1) / 2) * 100;
 
   const validateStep1 = () => {
@@ -329,31 +330,31 @@ const TestCreationWizard = () => {
   const totalQuestionMarks = questions.reduce((sum, q) => sum + q.marks, 0);
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 md:p-8">
+    <div className="min-h-screen bg-muted/30 p-3 sm:p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-6">
-          <Button variant="ghost" onClick={() => navigate('/teacher/dashboard')} className="mb-4">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+        <div className="mb-4 sm:mb-6">
+          <Button variant="ghost" onClick={() => navigate('/teacher/dashboard')} className="mb-2 sm:mb-4 -ml-2 text-xs sm:text-sm">
+            <ArrowLeft className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
             Back to Dashboard
           </Button>
           
-          <h1 className="text-2xl font-bold">Create New Test</h1>
-          <p className="text-muted-foreground">Step {currentStep} of 3</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Create New Test</h1>
+          <p className="text-sm text-muted-foreground">Step {currentStep} of 3</p>
         </div>
 
         {/* Progress Bar */}
-        <div className="mb-8">
-          <Progress value={progressPercentage + (currentStep === 3 ? 50 : 0)} className="h-2" />
-          <div className="flex justify-between mt-2 text-sm">
-            <span className={currentStep >= 1 ? 'text-primary font-medium' : 'text-muted-foreground'}>
-              1. Test Details
+        <div className="mb-6 sm:mb-8">
+          <Progress value={currentStep === 3 ? 100 : progressPercentage} className="h-2" />
+          <div className="flex justify-between mt-2 text-xs sm:text-sm gap-1">
+            <span className={`text-center flex-1 ${currentStep >= 1 ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+              <span className="hidden sm:inline">1. </span>Test Details
             </span>
-            <span className={currentStep >= 2 ? 'text-primary font-medium' : 'text-muted-foreground'}>
-              2. Add Questions
+            <span className={`text-center flex-1 ${currentStep >= 2 ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+              <span className="hidden sm:inline">2. </span>Questions
             </span>
-            <span className={currentStep >= 3 ? 'text-primary font-medium' : 'text-muted-foreground'}>
-              3. Review & Publish
+            <span className={`text-center flex-1 ${currentStep >= 3 ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+              <span className="hidden sm:inline">3. </span>Review
             </span>
           </div>
         </div>
@@ -372,29 +373,30 @@ const TestCreationWizard = () => {
         {/* Step 1: Test Details */}
         {currentStep === 1 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                 Test Details
               </CardTitle>
-              <CardDescription>Enter the basic information about your test</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Enter the basic information about your test</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="p-4 sm:p-6 pt-0 space-y-4 sm:space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="title">Test Title *</Label>
+                <Label htmlFor="title" className="text-sm">Test Title *</Label>
                 <Input
                   id="title"
                   placeholder="e.g., Chapter 1-3 Quiz"
                   value={testTitle}
                   onChange={(e) => setTestTitle(e.target.value)}
+                  className="text-sm"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-2">
-                  <Label>Subject *</Label>
+                  <Label className="text-sm">Subject *</Label>
                   <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-                    <SelectTrigger>
+                    <SelectTrigger className="text-sm">
                       <SelectValue placeholder="Select subject" />
                     </SelectTrigger>
                     <SelectContent>
@@ -408,9 +410,9 @@ const TestCreationWizard = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Test Type *</Label>
+                  <Label className="text-sm">Test Type *</Label>
                   <Select value={testType} onValueChange={(v) => setTestType(v as 'weekly' | 'monthly')}>
-                    <SelectTrigger>
+                    <SelectTrigger className="text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -423,9 +425,9 @@ const TestCreationWizard = () => {
 
               {selectedSubjectData && (
                 <div className="space-y-2">
-                  <Label>Chapters {hasChapters ? '*' : '(Optional)'}</Label>
+                  <Label className="text-sm">Chapters {hasChapters ? '*' : '(Optional)'}</Label>
                   {hasChapters ? (
-                    <div className="border rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
+                    <div className="border rounded-lg p-3 sm:p-4 space-y-2 max-h-40 sm:max-h-48 overflow-y-auto">
                       {subjectChapters.map(chapter => (
                         <div key={chapter.id} className="flex items-center space-x-2">
                           <Checkbox
@@ -433,40 +435,42 @@ const TestCreationWizard = () => {
                             checked={selectedChapters.includes(chapter.id)}
                             onCheckedChange={() => handleChapterToggle(chapter.id)}
                           />
-                          <Label htmlFor={chapter.id} className="cursor-pointer">
+                          <Label htmlFor={chapter.id} className="cursor-pointer text-sm">
                             {chapter.title}
                           </Label>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="border rounded-lg p-4 text-muted-foreground text-sm">
+                    <div className="border rounded-lg p-3 sm:p-4 text-muted-foreground text-xs sm:text-sm">
                       No chapters available for this subject. You can create the test without chapters.
                     </div>
                   )}
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="duration">Duration (minutes) *</Label>
+                  <Label htmlFor="duration" className="text-sm">Duration (min) *</Label>
                   <Input
                     id="duration"
                     type="number"
                     min={5}
                     value={duration}
                     onChange={(e) => setDuration(Number(e.target.value))}
+                    className="text-sm"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="marks">Total Marks *</Label>
+                  <Label htmlFor="marks" className="text-sm">Total Marks *</Label>
                   <Input
                     id="marks"
                     type="number"
                     min={1}
                     value={totalMarks}
                     onChange={(e) => setTotalMarks(Number(e.target.value))}
+                    className="text-sm"
                   />
                 </div>
               </div>
@@ -767,32 +771,34 @@ const TestCreationWizard = () => {
         )}
 
         {/* Navigation Buttons */}
-        <div className="flex justify-between mt-6">
+        <div className="flex justify-between mt-4 sm:mt-6 gap-2">
           <Button 
             variant="outline" 
             onClick={handleBack}
             disabled={currentStep === 1}
+            size="sm"
+            className="text-xs sm:text-sm"
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
+            <ArrowLeft className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden xs:inline">Back</span>
           </Button>
 
           {currentStep < 3 ? (
-            <Button onClick={handleNext}>
+            <Button onClick={handleNext} size="sm" className="text-xs sm:text-sm">
               Next
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight className="ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           ) : (
-            <Button onClick={handlePublish} disabled={loading}>
+            <Button onClick={handlePublish} disabled={loading} size="sm" className="text-xs sm:text-sm">
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                   Publishing...
                 </>
               ) : (
                 <>
-                  <Check className="mr-2 h-4 w-4" />
-                  Publish Test
+                  <Check className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                  Publish
                 </>
               )}
             </Button>
