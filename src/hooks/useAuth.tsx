@@ -22,11 +22,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
       if (currentUser) {
+        // Fetch role before setting user to avoid race condition
         const userRole = await getUserRole(currentUser.uid);
         setRole(userRole);
+        setUser(currentUser);
       } else {
+        setUser(null);
         setRole(null);
       }
       setLoading(false);
