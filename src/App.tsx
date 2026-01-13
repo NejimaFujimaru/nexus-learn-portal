@@ -127,6 +127,11 @@ const App = () => (
                 <TestCreationWizard />
               </ProtectedRoute>
             } />
+            <Route path="/teacher/test-creation-wizard" element={
+              <ProtectedRoute allowedRole="teacher">
+                <TestCreationWizard />
+              </ProtectedRoute>
+            } />
             <Route path="/teacher/question-builder" element={
               <ProtectedRoute allowedRole="teacher">
                 <QuestionBuilder />
