@@ -42,15 +42,8 @@ const DEFAULT_MARKS = {
   long: 5
 };
 
-// Multi-model fallback sequence (all should be free-tier compatible on OpenRouter)
-const MODEL_CHAIN = [
-  'tngtech/deepseek-r1t2-chimera:free',
-  'deepseek/deepseek-chat',
-  'google/gemini-flash-1.5',
-  'openai/gpt-4o-mini',
-] as const;
-
-type ModelId = (typeof MODEL_CHAIN)[number];
+// Single AI model for question generation
+const AI_MODEL = 'google/gemini-2.5-pro-exp-03-25:free';
 
 // Animated Star Component
 const AnimatedStar = ({ delay, size, left, top }: { delay: number; size: number; left: string; top: string }) => (
@@ -515,16 +508,10 @@ For Long Answer:
 
 OUTPUT ONLY THE JSON ARRAY:`;
 
-      const strictSystemPrompts: Record<number, string> = {
-        0: 'You are a JSON generator. You must return ONLY a valid JSON array of questions. Do not include markdown, commentary, or any extra keys.',
-        1: 'Return ONLY a JSON array. If you include anything else (markdown, prose, XML, etc.), the user application will break.',
-        2: 'CRITICAL: Output must be a single JSON array. No code fences, no natural language, no reasoning.',
-        3: 'FINAL ATTEMPT: Respond with a bare JSON array following the described question schema. Any other format is considered failure.',
-      };
+      const systemMessage = 'You are a JSON generator. You must return ONLY a valid JSON array of questions. Do not include markdown, commentary, or any extra keys.';
 
-      const tryCallModel = async (model: ModelId, attemptIndex: number) => {
-        const systemMessage = strictSystemPrompts[attemptIndex] ?? strictSystemPrompts[3];
-
+      // Call OpenRouter API with the single model
+      const callAI = async (): Promise<any[]> => {
         let response: Response | null = null;
         let retryCount = 0;
         const maxRetries = 3;
@@ -534,31 +521,30 @@ OUTPUT ONLY THE JSON ARRAY:`;
             response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
               method: 'POST',
               headers: {
-                Authorization: `Bearer ${apiKey}`,
-                Accept: 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
                 'HTTP-Referer': window.location.origin,
                 'X-Title': 'Nexus Learn Test Creator',
-                'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                model,
+                model: AI_MODEL,
                 messages: [
                   { role: 'system', content: systemMessage },
                   { role: 'user', content: basePrompt },
                 ],
                 temperature: 0.4,
-                max_tokens: 3000,
+                max_tokens: 4000,
               }),
             });
 
             if (response.ok) break;
 
-            // Retry rate limit / server errors
+            // Retry on rate limit or server errors
             if (response.status === 429 || response.status >= 500) {
               retryCount++;
               if (retryCount < maxRetries) {
-                setStage(`Model ${attemptIndex + 1}: rate limited, retrying...`, 40 + retryCount * 5);
-                await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
+                setStage(`Rate limited, retrying (${retryCount}/${maxRetries})...`, 40 + retryCount * 5);
+                await new Promise((resolve) => setTimeout(resolve, 2000 * retryCount));
                 continue;
               }
             }
@@ -568,12 +554,12 @@ OUTPUT ONLY THE JSON ARRAY:`;
             if (retryCount >= maxRetries) {
               const msg = typeof fetchError?.message === 'string' ? fetchError.message : '';
               if (msg.toLowerCase().includes('failed to fetch')) {
-                throw new Error('Network/CORS error calling OpenRouter. If this persists, OpenRouter is blocking browser requests and we will need a server-side proxy.');
+                throw new Error('Network error calling OpenRouter. Please check your internet connection.');
               }
               throw fetchError;
             }
-            setStage(`Model ${attemptIndex + 1}: network issue, retrying...`, 40 + retryCount * 5);
-            await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
+            setStage(`Network issue, retrying (${retryCount}/${maxRetries})...`, 40 + retryCount * 5);
+            await new Promise((resolve) => setTimeout(resolve, 2000 * retryCount));
           }
         }
 
@@ -597,7 +583,7 @@ OUTPUT ONLY THE JSON ARRAY:`;
               : response?.status === 401
                 ? 'Invalid API key. Please check the configuration.'
                 : response?.status === 403
-                  ? 'Forbidden. Check API key permissions and your OpenRouter account limits.'
+                  ? 'Forbidden. Check API key permissions and your OpenRouter account.'
                   : response?.status
                     ? `API Error: ${response.status}${rawText ? ` — ${rawText.slice(0, 160)}` : ''}`
                     : 'Network error');
@@ -605,51 +591,27 @@ OUTPUT ONLY THE JSON ARRAY:`;
           throw new Error(errorMessage);
         }
 
-        return response.json();
+        const data = await response.json();
+        const content =
+          (data?.choices?.[0]?.message?.content as string | undefined) ||
+          (typeof data?.choices?.[0]?.message === 'string'
+            ? (data.choices[0].message as string)
+            : undefined);
+
+        if (!content || !content.trim()) {
+          throw new Error('No response from AI. Please try again.');
+        }
+
+        const parsedQuestions = parseQuestionsFromModel(content);
+        if (!Array.isArray(parsedQuestions) || parsedQuestions.length === 0) {
+          throw new Error('No valid questions were generated.');
+        }
+
+        return parsedQuestions;
       };
 
-      // Call OpenRouter with multi-model fallback and parse per-model
       const parsed = await withProgress(
-        (async () => {
-          let lastError: any = null;
-
-          for (let i = 0; i < MODEL_CHAIN.length; i++) {
-            const model = MODEL_CHAIN[i];
-            try {
-              setStage(`Using AI model ${i + 1}/${MODEL_CHAIN.length}…`, 35 + i * 5);
-              const data = await tryCallModel(model, i);
-
-              const content =
-                (data?.choices?.[0]?.message?.content as string | undefined) ||
-                (typeof data?.choices?.[0]?.message === 'string'
-                  ? (data.choices[0].message as string)
-                  : undefined);
-
-              if (!content || !content.trim()) {
-                throw new Error('No response from AI. Please try again.');
-              }
-
-              try {
-                const parsedForModel = parseQuestionsFromModel(content);
-                if (!Array.isArray(parsedForModel) || parsedForModel.length === 0) {
-                  throw new Error('No valid questions were generated.');
-                }
-                return parsedForModel;
-              } catch (parseError) {
-                console.error('Parse error for model', model, parseError, 'Content:', content);
-                throw new Error('Failed to parse AI response.');
-              }
-            } catch (err) {
-              console.warn(`Model ${model} failed`, err);
-              lastError = err;
-              if (i < MODEL_CHAIN.length - 1) {
-                setStage('Retrying with backup AI model…', 45 + i * 5);
-              }
-            }
-          }
-
-          throw lastError || new Error('All AI models failed to generate questions. Please try again.');
-        })(),
+        callAI(),
         { start: 35, end: 78, message: 'Generating questions with AI…', minMs: 1600 },
       );
 
