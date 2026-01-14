@@ -42,8 +42,8 @@ const DEFAULT_MARKS = {
   long: 5
 };
 
-// Single AI model for question generation
-const AI_MODEL = 'google/gemini-2.5-pro-exp-03-25:free';
+// Single AI model for question generation - OpenRouter
+const AI_MODEL = 'meta-llama/llama-3.1-405b-instruct:free';
 
 // Animated Star Component
 const AnimatedStar = ({ delay, size, left, top }: { delay: number; size: number; left: string; top: string }) => (
