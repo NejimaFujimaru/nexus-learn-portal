@@ -9,6 +9,7 @@ import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, Brain, Sta
 import { toast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
+import { callOpenRouterWithFallback } from '@/lib/openrouter-helper';
 
 interface Question {
   id: string;
@@ -41,9 +42,6 @@ const DEFAULT_MARKS = {
   short: 2,
   long: 5
 };
-
-// Single model configuration (user-requested)
-const AI_MODEL = 'meta-llama/llama-3.1-405b-instruct:free';
 
 // Animated Star Component
 const AnimatedStar = ({ delay, size, left, top }: { delay: number; size: number; left: string; top: string }) => (
@@ -210,9 +208,21 @@ export const AIQuestionGenerator = ({
     const checkConfig = async () => {
       setConfigLoading(true);
       try {
-        const configRef = ref(database, 'config/openrouterKey');
-        const snapshot = await get(configRef);
-        setApiKeyConfigured(snapshot.exists() && snapshot.val()?.trim().length > 0);
+        // Preferred new path
+        const primaryRef = ref(database, 'config/openrouter/apiKey');
+        const primarySnap = await get(primaryRef);
+        let raw: unknown = primarySnap.exists() ? primarySnap.val() : '';
+        let key = typeof raw === 'string' ? raw.trim() : '';
+
+        // Backwards‑compat: also accept legacy config/openrouterKey
+        if (!key) {
+          const legacyRef = ref(database, 'config/openrouterKey');
+          const legacySnap = await get(legacyRef);
+          raw = legacySnap.exists() ? legacySnap.val() : '';
+          key = typeof raw === 'string' ? raw.trim() : '';
+        }
+
+        setApiKeyConfigured(Boolean(key));
       } catch (error) {
         console.error('Error checking API config:', error);
         setApiKeyConfigured(false);
@@ -453,30 +463,7 @@ export const AIQuestionGenerator = ({
     try {
       await simulateProgress(0, 18, 450, 'Preparing chapter content...');
 
-      // Fetch API key from database
-      const apiKey = await withProgress(
-        (async () => {
-          try {
-            const configRef = ref(database, 'config/openrouterKey');
-            const snapshot = await get(configRef);
-            const raw = snapshot.val();
-            const key = typeof raw === 'string' ? raw.trim() : '';
-
-            if (!key) {
-              throw new Error('API key not found in database configuration (config/openrouterKey).');
-            }
-            return key;
-          } catch (e: any) {
-            const msg = typeof e?.message === 'string' ? e.message : '';
-            if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied')) {
-              throw new Error('Permission denied reading config/openrouterKey. Update your Firebase RTDB rules to allow teachers to read this path.');
-            }
-            throw e;
-          }
-        })(),
-        { start: 18, end: 28, message: 'Reading API configuration...', minMs: 250 },
-      );
-
+      await simulateProgress(18, 28, 350, 'Reading AI configuration...');
       await simulateProgress(28, 35, 350, 'Building prompt...');
 
       const basePrompt = `You are an expert teacher creating questions for a test.
@@ -516,105 +503,33 @@ OUTPUT ONLY THE JSON ARRAY:`;
 
       const systemMessage = 'You are a JSON generator. You must return ONLY a valid JSON array of questions. Do not include markdown, commentary, or any extra keys.';
 
-      const callModel = async (retryAttempt: number = 0): Promise<any> => {
-        const maxRetries = 3;
-        
-        try {
-          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-              'HTTP-Referer': window.location.origin,
-              'X-Title': 'Nexus Learn Test Creator',
-            },
-            body: JSON.stringify({
-              model: AI_MODEL,
-              messages: [
-                { role: 'system', content: systemMessage },
-                { role: 'user', content: basePrompt },
-              ],
-              temperature: 0.4,
-              // Higher values can make OpenRouter return "no endpoints found" for some providers
-              max_tokens: 1200,
-            }),
-          });
-
-          if (!response.ok) {
-            const rawText = await response.text().catch(() => '');
-            let errorPayload: any = null;
-            try {
-              errorPayload = rawText ? JSON.parse(rawText) : null;
-            } catch {
-              errorPayload = null;
-            }
-
-            // Handle retryable errors
-            if ((response.status === 429 || response.status >= 500) && retryAttempt < maxRetries) {
-              setStage(`Rate limited, retrying (${retryAttempt + 1}/${maxRetries})...`, 40 + retryAttempt * 5);
-              await new Promise((resolve) => setTimeout(resolve, 1500 * (retryAttempt + 1)));
-              return callModel(retryAttempt + 1);
-            }
-
-            const errorMessage =
-              errorPayload?.error?.message ||
-              (response.status === 429
-                ? 'Rate limited. Please wait a moment and try again.'
-                : response.status === 401
-                  ? 'Invalid API key. Please check the configuration.'
-                  : response.status === 403
-                    ? 'Forbidden. Check API key permissions and your OpenRouter account limits.'
-                    : `API Error: ${response.status}${rawText ? ` — ${rawText.slice(0, 160)}` : ''}`);
-
-            throw new Error(errorMessage);
-          }
-
-          return response.json();
-        } catch (fetchError: any) {
-          // Handle network errors with retry
-          if (retryAttempt < maxRetries) {
-            const msg = typeof fetchError?.message === 'string' ? fetchError.message : '';
-            if (msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('network')) {
-              setStage(`Network issue, retrying (${retryAttempt + 1}/${maxRetries})...`, 40 + retryAttempt * 5);
-              await new Promise((resolve) => setTimeout(resolve, 1500 * (retryAttempt + 1)));
-              return callModel(retryAttempt + 1);
-            }
-          }
-          throw fetchError;
-        }
-      };
-
-      // Call OpenRouter with the single model
-      const parsed = await withProgress(
+      const content = await withProgress(
         (async () => {
-          setStage(`Using ${AI_MODEL}…`, 38);
-          const data = await callModel();
-
-          const content =
-            (data?.choices?.[0]?.message?.content as string | undefined) ||
-            (typeof data?.choices?.[0]?.message === 'string'
-              ? (data.choices[0].message as string)
-              : undefined);
-
-          if (!content || !content.trim()) {
-            throw new Error('No response from AI. Please try again.');
-          }
-
-          try {
-            const parsedQuestions = parseQuestionsFromModel(content);
-            if (!Array.isArray(parsedQuestions) || parsedQuestions.length === 0) {
-              throw new Error('No valid questions were generated.');
-            }
-            return parsedQuestions;
-          } catch (parseError) {
-            console.error('Parse error:', parseError, 'Content:', content);
-            throw new Error('Failed to parse AI response. Please try again.');
-          }
+          setStage('Contacting AI providers…', 38);
+          return callOpenRouterWithFallback({
+            systemMessage,
+            userMessage: basePrompt,
+            temperature: 0.4,
+            maxTokens: 1200,
+          });
         })(),
         { start: 35, end: 78, message: 'Generating questions with AI…', minMs: 1600 },
       );
 
-      await simulateProgress(78, 85, 300, 'Parsing questions...');
+      if (!content || !content.trim()) {
+        throw new Error('No response from AI. Please try again.');
+      }
+
+      let parsed: any[];
+      try {
+        parsed = parseQuestionsFromModel(content);
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          throw new Error('No valid questions were generated.');
+        }
+      } catch (parseError) {
+        console.error('Parse error:', parseError, 'Content:', content);
+        throw new Error('Failed to parse AI response. Please try again.');
+      }
 
       // Validate and normalize each question (be forgiving to reduce failures)
       const generatedQuestions: Question[] = [];
@@ -765,7 +680,7 @@ OUTPUT ONLY THE JSON ARRAY:`;
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription className="text-xs sm:text-sm">
-                    AI service not configured. Please add the API key to the database at <code className="bg-muted px-1 rounded">config/openrouterKey</code>
+                    AI service not configured. Please add the API key to the database at <code className="bg-muted px-1 rounded">config/openrouter/apiKey</code> (or legacy <code className="bg-muted px-1 rounded">config/openrouterKey</code>)
                   </AlertDescription>
                 </Alert>
               )}

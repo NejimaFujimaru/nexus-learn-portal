@@ -67,6 +67,8 @@ const TestCreationWizard = () => {
   const [testType, setTestType] = useState<'weekly' | 'monthly'>('weekly');
   const [duration, setDuration] = useState(30);
   const [totalMarks, setTotalMarks] = useState(100);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [specialInstructions, setSpecialInstructions] = useState('');
   
   // Step 2: Questions
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -287,6 +289,8 @@ const TestCreationWizard = () => {
         type: testType,
         duration,
         totalMarks,
+        difficulty,
+        specialInstructions,
         published: true,
         createdAt: new Date().toISOString(),
       };
@@ -470,6 +474,33 @@ const TestCreationWizard = () => {
                     min={1}
                     value={totalMarks}
                     onChange={(e) => setTotalMarks(Number(e.target.value))}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm">Difficulty</Label>
+                  <Select value={difficulty} onValueChange={(v) => setDifficulty(v as 'easy' | 'medium' | 'hard')}>
+                    <SelectTrigger className="text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="easy">Easy</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="hard">Hard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Special Instructions (optional)</Label>
+                  <Textarea
+                    rows={3}
+                    placeholder="Any extra instructions for AI or students (e.g., focus on application-level questions, avoid heavy calculations, etc.)"
+                    value={specialInstructions}
+                    onChange={(e) => setSpecialInstructions(e.target.value)}
                     className="text-sm"
                   />
                 </div>
@@ -743,6 +774,10 @@ const TestCreationWizard = () => {
                   <p className="text-xs sm:text-sm text-muted-foreground">Total Marks</p>
                   <p className="font-medium text-sm sm:text-base">{totalQuestionMarks}</p>
                 </div>
+                <div className="space-y-1">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Difficulty</p>
+                  <p className="font-medium capitalize text-sm sm:text-base">{difficulty}</p>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -760,11 +795,14 @@ const TestCreationWizard = () => {
                 </div>
               </div>
 
-              <Alert>
-                <Check className="h-4 w-4" />
-                <AlertDescription>
-                  Once published, this test will be visible to all students.
-                </AlertDescription>
+              <Alert className="relative overflow-hidden">
+                <div className="absolute inset-0 bg-primary/5 animate-pulse" aria-hidden="true" />
+                <div className="relative flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  <AlertDescription>
+                    Once published, this test will be visible to all students.
+                  </AlertDescription>
+                </div>
               </Alert>
             </CardContent>
           </Card>
