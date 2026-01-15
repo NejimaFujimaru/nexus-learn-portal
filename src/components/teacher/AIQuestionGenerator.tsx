@@ -42,15 +42,8 @@ const DEFAULT_MARKS = {
   long: 5
 };
 
-// Multi-model fallback sequence (all should be free-tier compatible on OpenRouter)
-const MODEL_CHAIN = [
-  'tngtech/deepseek-r1t2-chimera:free',
-  'deepseek/deepseek-chat',
-  'google/gemini-flash-1.5',
-  'openai/gpt-4o-mini',
-] as const;
-
-type ModelId = (typeof MODEL_CHAIN)[number];
+// Single model configuration
+const AI_MODEL = 'meta-llama/llama-3.1-405b-instruct:free';
 
 // Animated Star Component
 const AnimatedStar = ({ delay, size, left, top }: { delay: number; size: number; left: string; top: string }) => (
@@ -515,140 +508,101 @@ For Long Answer:
 
 OUTPUT ONLY THE JSON ARRAY:`;
 
-      const strictSystemPrompts: Record<number, string> = {
-        0: 'You are a JSON generator. You must return ONLY a valid JSON array of questions. Do not include markdown, commentary, or any extra keys.',
-        1: 'Return ONLY a JSON array. If you include anything else (markdown, prose, XML, etc.), the user application will break.',
-        2: 'CRITICAL: Output must be a single JSON array. No code fences, no natural language, no reasoning.',
-        3: 'FINAL ATTEMPT: Respond with a bare JSON array following the described question schema. Any other format is considered failure.',
-      };
+      const systemMessage = 'You are a JSON generator. You must return ONLY a valid JSON array of questions. Do not include markdown, commentary, or any extra keys.';
 
-      const tryCallModel = async (model: ModelId, attemptIndex: number) => {
-        const systemMessage = strictSystemPrompts[attemptIndex] ?? strictSystemPrompts[3];
-
-        let response: Response | null = null;
-        let retryCount = 0;
+      const callModel = async (retryAttempt: number = 0): Promise<any> => {
         const maxRetries = 3;
+        
+        try {
+          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': window.location.origin,
+              'X-Title': 'Nexus Learn Test Creator',
+            },
+            body: JSON.stringify({
+              model: AI_MODEL,
+              messages: [
+                { role: 'system', content: systemMessage },
+                { role: 'user', content: basePrompt },
+              ],
+              temperature: 0.4,
+              max_tokens: 3000,
+            }),
+          });
 
-        while (retryCount < maxRetries) {
-          try {
-            response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                Accept: 'application/json',
-                'HTTP-Referer': window.location.origin,
-                'X-Title': 'Nexus Learn Test Creator',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                model,
-                messages: [
-                  { role: 'system', content: systemMessage },
-                  { role: 'user', content: basePrompt },
-                ],
-                temperature: 0.4,
-                max_tokens: 3000,
-              }),
-            });
-
-            if (response.ok) break;
-
-            // Retry rate limit / server errors
-            if (response.status === 429 || response.status >= 500) {
-              retryCount++;
-              if (retryCount < maxRetries) {
-                setStage(`Model ${attemptIndex + 1}: rate limited, retrying...`, 40 + retryCount * 5);
-                await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
-                continue;
-              }
-            }
-            break;
-          } catch (fetchError: any) {
-            retryCount++;
-            if (retryCount >= maxRetries) {
-              const msg = typeof fetchError?.message === 'string' ? fetchError.message : '';
-              if (msg.toLowerCase().includes('failed to fetch')) {
-                throw new Error('Network/CORS error calling OpenRouter. If this persists, OpenRouter is blocking browser requests and we will need a server-side proxy.');
-              }
-              throw fetchError;
-            }
-            setStage(`Model ${attemptIndex + 1}: network issue, retrying...`, 40 + retryCount * 5);
-            await new Promise((resolve) => setTimeout(resolve, 1500 * retryCount));
-          }
-        }
-
-        if (!response || !response.ok) {
-          let errorPayload: any = null;
-          let rawText = '';
-
-          if (response) {
-            rawText = await response.text().catch(() => '');
+          if (!response.ok) {
+            const rawText = await response.text().catch(() => '');
+            let errorPayload: any = null;
             try {
               errorPayload = rawText ? JSON.parse(rawText) : null;
             } catch {
               errorPayload = null;
             }
+
+            // Handle retryable errors
+            if ((response.status === 429 || response.status >= 500) && retryAttempt < maxRetries) {
+              setStage(`Rate limited, retrying (${retryAttempt + 1}/${maxRetries})...`, 40 + retryAttempt * 5);
+              await new Promise((resolve) => setTimeout(resolve, 1500 * (retryAttempt + 1)));
+              return callModel(retryAttempt + 1);
+            }
+
+            const errorMessage =
+              errorPayload?.error?.message ||
+              (response.status === 429
+                ? 'Rate limited. Please wait a moment and try again.'
+                : response.status === 401
+                  ? 'Invalid API key. Please check the configuration.'
+                  : response.status === 403
+                    ? 'Forbidden. Check API key permissions and your OpenRouter account limits.'
+                    : `API Error: ${response.status}${rawText ? ` — ${rawText.slice(0, 160)}` : ''}`);
+
+            throw new Error(errorMessage);
           }
 
-          const errorMessage =
-            errorPayload?.error?.message ||
-            (response?.status === 429
-              ? 'Rate limited. Please wait a moment and try again.'
-              : response?.status === 401
-                ? 'Invalid API key. Please check the configuration.'
-                : response?.status === 403
-                  ? 'Forbidden. Check API key permissions and your OpenRouter account limits.'
-                  : response?.status
-                    ? `API Error: ${response.status}${rawText ? ` — ${rawText.slice(0, 160)}` : ''}`
-                    : 'Network error');
-
-          throw new Error(errorMessage);
-        }
-
-        return response.json();
-      };
-
-      // Call OpenRouter with multi-model fallback and parse per-model
-      const parsed = await withProgress(
-        (async () => {
-          let lastError: any = null;
-
-          for (let i = 0; i < MODEL_CHAIN.length; i++) {
-            const model = MODEL_CHAIN[i];
-            try {
-              setStage(`Using AI model ${i + 1}/${MODEL_CHAIN.length}…`, 35 + i * 5);
-              const data = await tryCallModel(model, i);
-
-              const content =
-                (data?.choices?.[0]?.message?.content as string | undefined) ||
-                (typeof data?.choices?.[0]?.message === 'string'
-                  ? (data.choices[0].message as string)
-                  : undefined);
-
-              if (!content || !content.trim()) {
-                throw new Error('No response from AI. Please try again.');
-              }
-
-              try {
-                const parsedForModel = parseQuestionsFromModel(content);
-                if (!Array.isArray(parsedForModel) || parsedForModel.length === 0) {
-                  throw new Error('No valid questions were generated.');
-                }
-                return parsedForModel;
-              } catch (parseError) {
-                console.error('Parse error for model', model, parseError, 'Content:', content);
-                throw new Error('Failed to parse AI response.');
-              }
-            } catch (err) {
-              console.warn(`Model ${model} failed`, err);
-              lastError = err;
-              if (i < MODEL_CHAIN.length - 1) {
-                setStage('Retrying with backup AI model…', 45 + i * 5);
-              }
+          return response.json();
+        } catch (fetchError: any) {
+          // Handle network errors with retry
+          if (retryAttempt < maxRetries) {
+            const msg = typeof fetchError?.message === 'string' ? fetchError.message : '';
+            if (msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('network')) {
+              setStage(`Network issue, retrying (${retryAttempt + 1}/${maxRetries})...`, 40 + retryAttempt * 5);
+              await new Promise((resolve) => setTimeout(resolve, 1500 * (retryAttempt + 1)));
+              return callModel(retryAttempt + 1);
             }
           }
+          throw fetchError;
+        }
+      };
 
-          throw lastError || new Error('All AI models failed to generate questions. Please try again.');
+      // Call OpenRouter with the single model
+      const parsed = await withProgress(
+        (async () => {
+          setStage('Using Llama 3.1 405B AI model…', 38);
+          const data = await callModel();
+
+          const content =
+            (data?.choices?.[0]?.message?.content as string | undefined) ||
+            (typeof data?.choices?.[0]?.message === 'string'
+              ? (data.choices[0].message as string)
+              : undefined);
+
+          if (!content || !content.trim()) {
+            throw new Error('No response from AI. Please try again.');
+          }
+
+          try {
+            const parsedQuestions = parseQuestionsFromModel(content);
+            if (!Array.isArray(parsedQuestions) || parsedQuestions.length === 0) {
+              throw new Error('No valid questions were generated.');
+            }
+            return parsedQuestions;
+          } catch (parseError) {
+            console.error('Parse error:', parseError, 'Content:', content);
+            throw new Error('Failed to parse AI response. Please try again.');
+          }
         })(),
         { start: 35, end: 78, message: 'Generating questions with AI…', minMs: 1600 },
       );
