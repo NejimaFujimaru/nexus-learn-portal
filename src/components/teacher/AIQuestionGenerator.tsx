@@ -42,8 +42,8 @@ const DEFAULT_MARKS = {
   long: 5
 };
 
-// Single model configuration - using reliable free tier model
-const AI_MODEL = 'meta-llama/llama-3.1-8b-instruct:free';
+// Single model configuration (user-requested)
+const AI_MODEL = 'meta-llama/llama-3.1-405b-instruct:free';
 
 // Animated Star Component
 const AnimatedStar = ({ delay, size, left, top }: { delay: number; size: number; left: string; top: string }) => (
@@ -421,8 +421,14 @@ export const AIQuestionGenerator = ({
       return;
     }
 
-    const chapterContent = getSelectedChaptersContent();
+    let chapterContent = getSelectedChaptersContent();
     const chapterTitles = getSelectedChapterTitles();
+
+    // Prevent OpenRouter "no endpoints found" by keeping prompts within provider limits
+    const MAX_CHAPTER_CONTENT_CHARS = 20000;
+    if (chapterContent.length > MAX_CHAPTER_CONTENT_CHARS) {
+      chapterContent = `${chapterContent.slice(0, MAX_CHAPTER_CONTENT_CHARS)}\n\n[TRUNCATED: Content was too long for the model/providers. Reduce selected chapters or shorten chapter content for higher fidelity.]`;
+    }
 
     if (!chapterContent.trim()) {
       toast({
@@ -529,7 +535,8 @@ OUTPUT ONLY THE JSON ARRAY:`;
                 { role: 'user', content: basePrompt },
               ],
               temperature: 0.4,
-              max_tokens: 3000,
+              // Higher values can make OpenRouter return "no endpoints found" for some providers
+              max_tokens: 1200,
             }),
           });
 
@@ -580,7 +587,7 @@ OUTPUT ONLY THE JSON ARRAY:`;
       // Call OpenRouter with the single model
       const parsed = await withProgress(
         (async () => {
-          setStage('Using Llama 3.1 405B AI model…', 38);
+          setStage(`Using ${AI_MODEL}…`, 38);
           const data = await callModel();
 
           const content =
