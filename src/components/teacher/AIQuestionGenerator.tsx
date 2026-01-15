@@ -42,8 +42,8 @@ const DEFAULT_MARKS = {
   long: 5
 };
 
-// Single model configuration
-const AI_MODEL = 'meta-llama/llama-3.1-405b-instruct:free';
+// Single model configuration - using reliable free tier model
+const AI_MODEL = 'meta-llama/llama-3.1-8b-instruct:free';
 
 // Animated Star Component
 const AnimatedStar = ({ delay, size, left, top }: { delay: number; size: number; left: string; top: string }) => (
