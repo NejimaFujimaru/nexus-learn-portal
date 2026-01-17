@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, Brain, Star, Zap, PartyPopper } from 'lucide-react';
+import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, Brain, PartyPopper } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
@@ -43,43 +43,10 @@ const DEFAULT_MARKS = {
   long: 5
 };
 
-// Animated Star Component
-const AnimatedStar = ({ delay, size, left, top }: { delay: number; size: number; left: string; top: string }) => (
-  <div
-    className="absolute animate-pulse"
-    style={{
-      left,
-      top,
-      animationDelay: `${delay}ms`,
-      animationDuration: `${1500 + Math.random() * 1000}ms`,
-    }}
-  >
-    <Star 
-      className="text-primary/60" 
-      style={{ 
-        width: size, 
-        height: size,
-        filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.5))'
-      }} 
-      fill="currentColor"
-    />
-  </div>
-);
-
-// Galaxy Animation Component
-const GalaxyAnimation = ({ stage }: { stage: string }) => {
-  const stars = useMemo(() => 
-    Array.from({ length: 20 }, (_, i) => ({
-      id: i,
-      delay: i * 150,
-      size: 8 + Math.random() * 16,
-      left: `${5 + Math.random() * 90}%`,
-      top: `${5 + Math.random() * 90}%`,
-    })), []
-  );
-
+// Galaxy Animation Component - Only central star, no extra decorations
+const GalaxyAnimation = () => {
   return (
-    <div className="relative w-full h-48 sm:h-64 bg-gradient-to-br from-primary/5 via-background to-primary/10 rounded-xl overflow-hidden border border-primary/20">
+    <div className="relative w-full h-48 sm:h-56 bg-gradient-to-br from-primary/5 via-background to-primary/10 rounded-xl overflow-hidden border border-primary/20">
       {/* Rotating glow */}
       <div 
         className="absolute inset-0 opacity-30"
@@ -89,12 +56,7 @@ const GalaxyAnimation = ({ stage }: { stage: string }) => {
         }}
       />
       
-      {/* Stars */}
-      {stars.map((star) => (
-        <AnimatedStar key={star.id} {...star} />
-      ))}
-      
-      {/* Center icon */}
+      {/* Center icon only - the big central star */}
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative">
           <div 
@@ -107,18 +69,13 @@ const GalaxyAnimation = ({ stage }: { stage: string }) => {
           />
         </div>
       </div>
-      
-      {/* Stage text */}
-      <div className="absolute bottom-4 left-0 right-0 text-center">
-        <p className="text-sm font-medium text-primary animate-pulse">{stage || 'Preparing...'}</p>
-      </div>
     </div>
   );
 };
 
-// Completion Animation Component
+// Completion Animation Component - Clean, no extra decorative stars
 const CompletionAnimation = ({ questionCount, totalMarks }: { questionCount: number; totalMarks: number }) => (
-  <div className="relative w-full py-8 flex flex-col items-center justify-center space-y-4 animate-scale-in">
+  <div className="w-full py-6 flex flex-col items-center justify-center space-y-4 animate-scale-in">
     <div className="relative">
       <div 
         className="absolute inset-0 bg-green-500/20 rounded-full blur-2xl animate-pulse"
@@ -141,20 +98,6 @@ const CompletionAnimation = ({ questionCount, totalMarks }: { questionCount: num
       <p className="text-sm text-muted-foreground">
         Total marks: <span className="font-medium">{totalMarks}</span>
       </p>
-    </div>
-    
-    {/* Decorative elements */}
-    <div className="absolute top-2 left-4">
-      <Zap className="w-4 h-4 text-yellow-500 animate-pulse" />
-    </div>
-    <div className="absolute top-8 right-6">
-      <Star className="w-3 h-3 text-primary animate-pulse" fill="currentColor" />
-    </div>
-    <div className="absolute bottom-4 left-8">
-      <Star className="w-4 h-4 text-primary/60 animate-pulse" fill="currentColor" />
-    </div>
-    <div className="absolute bottom-6 right-4">
-      <Zap className="w-3 h-3 text-yellow-500/60 animate-pulse" />
     </div>
   </div>
 );
@@ -893,9 +836,8 @@ OUTPUT ONLY THE JSON ARRAY:`;
         >
           {viewState === 'generating' && (
             <div className="space-y-6 py-4">
-              {/* Galaxy Animation */}
-              <GalaxyAnimation stage={generationStage} />
-              
+              {/* Galaxy Animation - central star only */}
+              <GalaxyAnimation />
               {/* Progress Bar */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
