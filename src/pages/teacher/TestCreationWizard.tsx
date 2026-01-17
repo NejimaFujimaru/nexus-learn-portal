@@ -514,24 +514,22 @@ const TestCreationWizard = () => {
           <div className="space-y-6">
             {/* AI Question Generator */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Plus className="h-5 w-5" />
-                    Add Questions
-                  </span>
-                  <AIQuestionGenerator
-                    selectedChapters={selectedChapters}
-                    chapters={subjectChapters}
-                    totalMarks={totalMarks}
-                    currentQuestionMarks={totalQuestionMarks}
-                    subjectName={selectedSubjectData?.name || 'Unknown Subject'}
-                    onQuestionsGenerated={addGeneratedQuestions}
-                  />
+              <CardHeader className="space-y-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Add Questions
                 </CardTitle>
                 <CardDescription>
                   Add questions manually or use AI to generate them from chapter content
                 </CardDescription>
+                <AIQuestionGenerator
+                  selectedChapters={selectedChapters}
+                  chapters={subjectChapters}
+                  totalMarks={totalMarks}
+                  currentQuestionMarks={totalQuestionMarks}
+                  subjectName={selectedSubjectData?.name || 'Unknown Subject'}
+                  onQuestionsGenerated={addGeneratedQuestions}
+                />
               </CardHeader>
             </Card>
 
@@ -673,14 +671,19 @@ const TestCreationWizard = () => {
                           className="flex items-center justify-between w-full"
                           onClick={() => toggleExpanded(question.id)}
                         >
-                          <div className="flex items-center gap-2">
-                            <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                            <span className="font-medium">Q{index + 1}.</span>
-                            <span className="text-sm text-muted-foreground capitalize">
-                              ({question.type})
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
+                            <span className="font-medium flex-shrink-0">Q{index + 1}.</span>
+                            <span className="text-sm text-muted-foreground capitalize flex-shrink-0">
+                              ({question.type === 'mcq' ? 'Mcq' : question.type === 'blank' ? 'Blank' : question.type === 'short' ? 'Short' : 'Long'})
                             </span>
-                            <span className="text-sm truncate max-w-xs">
-                              {question.text.substring(0, 50)}...
+                            <span className="text-sm truncate min-w-0">
+                              <span className="sm:hidden">
+                                {question.text.split(' ').slice(0, 3).join(' ')}...
+                              </span>
+                              <span className="hidden sm:inline">
+                                {question.text.substring(0, 50)}...
+                              </span>
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
