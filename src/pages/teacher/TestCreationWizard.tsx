@@ -488,7 +488,7 @@ const TestCreationWizard = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="easy">Easy</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="medium">Moderate</SelectItem>
                       <SelectItem value="hard">Hard</SelectItem>
                     </SelectContent>
                   </Select>
@@ -528,6 +528,7 @@ const TestCreationWizard = () => {
                   totalMarks={totalMarks}
                   currentQuestionMarks={totalQuestionMarks}
                   subjectName={selectedSubjectData?.name || 'Unknown Subject'}
+                  difficulty={difficulty}
                   onQuestionsGenerated={addGeneratedQuestions}
                 />
               </CardHeader>
@@ -648,14 +649,14 @@ const TestCreationWizard = () => {
               </CardContent>
             </Card>
 
-            {/* Questions List */}
+            {/* Questions List with Drag and Drop Reordering */}
             {questions.length > 0 && (
               <Card>
                 <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <CardTitle>Questions ({questions.length})</CardTitle>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="destructive"
                     size="sm"
                     onClick={clearAllQuestions}
                   >
@@ -666,13 +667,42 @@ const TestCreationWizard = () => {
                 <CardContent className="space-y-2">
                   {questions.map((question, index) => (
                     <Collapsible key={question.id} open={expandedQuestions.includes(question.id)}>
-                      <div className="border rounded-lg p-3">
+                      <div 
+                        className="border rounded-lg p-3 cursor-move"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('questionIndex', index.toString());
+                          e.currentTarget.classList.add('opacity-50');
+                        }}
+                        onDragEnd={(e) => {
+                          e.currentTarget.classList.remove('opacity-50');
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.classList.add('border-primary', 'bg-primary/5');
+                        }}
+                        onDragLeave={(e) => {
+                          e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
+                          const fromIndex = parseInt(e.dataTransfer.getData('questionIndex'));
+                          const toIndex = index;
+                          if (fromIndex !== toIndex) {
+                            const newQuestions = [...questions];
+                            const [removed] = newQuestions.splice(fromIndex, 1);
+                            newQuestions.splice(toIndex, 0, removed);
+                            setQuestions(newQuestions);
+                          }
+                        }}
+                      >
                         <CollapsibleTrigger 
                           className="flex items-center justify-between w-full"
                           onClick={() => toggleExpanded(question.id)}
                         >
                           <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
+                            <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                             <span className="font-medium flex-shrink-0">Q{index + 1}.</span>
                             <span className="text-sm text-muted-foreground capitalize flex-shrink-0">
                               ({question.type === 'mcq' ? 'Mcq' : question.type === 'blank' ? 'Blank' : question.type === 'short' ? 'Short' : 'Long'})
