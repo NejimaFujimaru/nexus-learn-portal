@@ -32,7 +32,6 @@ interface AIQuestionGeneratorProps {
   subjectName: string;
   totalMarks: number;
   currentQuestionMarks: number;
-  difficulty: 'easy' | 'medium' | 'hard';
   onQuestionsGenerated: (questions: Question[]) => void;
 }
 
@@ -147,7 +146,6 @@ export const AIQuestionGenerator = ({
   subjectName,
   totalMarks,
   currentQuestionMarks,
-  difficulty,
   onQuestionsGenerated
 }: AIQuestionGeneratorProps) => {
   const [open, setOpen] = useState(false);
@@ -449,33 +447,21 @@ export const AIQuestionGenerator = ({
       await simulateProgress(18, 28, 350, 'Reading AI configuration...');
       await simulateProgress(28, 35, 350, 'Building prompt...');
 
-      const difficultyLabel = difficulty === 'easy' ? 'Easy' : difficulty === 'medium' ? 'Moderate' : 'Hard';
-      const difficultyGuidance = 
-        difficulty === 'easy' 
-          ? 'Questions should be straightforward, testing basic recall and simple understanding. Use clear language and avoid complex scenarios.'
-          : difficulty === 'medium'
-            ? 'Questions should be of moderate difficulty, testing comprehension and application. Include some analytical thinking but avoid overly complex scenarios.'
-            : 'Questions should be challenging, testing deep understanding, critical thinking, and advanced application. Include complex scenarios and require synthesis of multiple concepts.';
-
       const basePrompt = `You are an expert teacher creating questions for a test.
 
 SUBJECT: ${subjectName}
 CHAPTER(S): ${chapterTitles}
-DIFFICULTY LEVEL: ${difficultyLabel}
-
-DIFFICULTY GUIDANCE: ${difficultyGuidance}
 
 CHAPTER CONTENT:
 ${chapterContent}
 
 TASK: Generate questions ONLY from the above chapter content. Do not use external knowledge.
-ALL QUESTIONS MUST BE AT THE "${difficultyLabel.toUpperCase()}" DIFFICULTY LEVEL.
 
 Generate exactly:
-${mcqCount > 0 ? `- ${mcqCount} Multiple Choice Questions (MCQ) with 4 options each, ${mcqMarks} mark(s) each - ${difficultyLabel} difficulty` : ''}
-${blankCount > 0 ? `- ${blankCount} Fill in the Blank questions, ${blankMarks} mark(s) each - ${difficultyLabel} difficulty` : ''}
-${shortCount > 0 ? `- ${shortCount} Short Answer questions, ${shortMarks} mark(s) each - ${difficultyLabel} difficulty` : ''}
-${longCount > 0 ? `- ${longCount} Long Answer questions, ${longMarks} mark(s) each - ${difficultyLabel} difficulty` : ''}
+${mcqCount > 0 ? `- ${mcqCount} Multiple Choice Questions (MCQ) with 4 options each, ${mcqMarks} mark(s) each` : ''}
+${blankCount > 0 ? `- ${blankCount} Fill in the Blank questions, ${blankMarks} mark(s) each` : ''}
+${shortCount > 0 ? `- ${shortCount} Short Answer questions, ${shortMarks} mark(s) each` : ''}
+${longCount > 0 ? `- ${longCount} Long Answer questions, ${longMarks} mark(s) each` : ''}
 
 IMPORTANT: Respond ONLY with a valid JSON array. No markdown, no code blocks, no explanation, no chain-of-thought, no reasoning tags.
 
