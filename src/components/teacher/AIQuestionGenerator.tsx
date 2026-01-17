@@ -43,7 +43,19 @@ const DEFAULT_MARKS = {
   long: 5
 };
 
-// Galaxy Animation Component - Only central star, no extra decorations
+// Small diamond star component
+const DiamondStar = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+  <svg 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    className={className}
+    style={style}
+  >
+    <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" />
+  </svg>
+);
+
+// Galaxy Animation Component - Central star with small diamond stars around it
 const GalaxyAnimation = () => {
   return (
     <div className="relative w-full h-48 sm:h-56 bg-gradient-to-br from-primary/5 via-background to-primary/10 rounded-xl overflow-hidden border border-primary/20">
@@ -56,7 +68,33 @@ const GalaxyAnimation = () => {
         }}
       />
       
-      {/* Center icon only - the big central star */}
+      {/* Small diamond stars around the central star */}
+      <DiamondStar 
+        className="absolute w-3 h-3 text-primary/60 animate-pulse"
+        style={{ top: '20%', left: '25%', animationDelay: '0.2s' }}
+      />
+      <DiamondStar 
+        className="absolute w-2 h-2 text-primary/40 animate-pulse"
+        style={{ top: '30%', right: '22%', animationDelay: '0.5s' }}
+      />
+      <DiamondStar 
+        className="absolute w-3 h-3 text-primary/50 animate-pulse"
+        style={{ bottom: '25%', left: '20%', animationDelay: '0.8s' }}
+      />
+      <DiamondStar 
+        className="absolute w-2.5 h-2.5 text-primary/55 animate-pulse"
+        style={{ bottom: '22%', right: '25%', animationDelay: '0.3s' }}
+      />
+      <DiamondStar 
+        className="absolute w-2 h-2 text-primary/45 animate-pulse"
+        style={{ top: '18%', right: '35%', animationDelay: '0.6s' }}
+      />
+      <DiamondStar 
+        className="absolute w-2 h-2 text-primary/35 animate-pulse"
+        style={{ bottom: '35%', left: '30%', animationDelay: '1s' }}
+      />
+      
+      {/* Center icon - the big central star */}
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative">
           <div 
