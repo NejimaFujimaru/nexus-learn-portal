@@ -213,6 +213,9 @@ const SubmissionReview = () => {
   };
 
   const getAnswerForQuestion = (questionId: string) => {
+    if (!submission.answers || !Array.isArray(submission.answers)) {
+      return undefined;
+    }
     const answer = submission.answers.find(a => a.questionId === questionId);
     return answer?.answer;
   };

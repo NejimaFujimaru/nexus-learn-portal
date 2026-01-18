@@ -25,7 +25,8 @@ Save findings to `{@artifacts_path}/investigation.md` with:
 - Affected components
 - Proposed solution
 
-### [ ] Step: Implementation
+### [x] Step: Implementation
+<!-- chat-id: f5207c10-efe4-4989-afba-9ddc07371bc0 -->
 Read `{@artifacts_path}/investigation.md`
 Implement the bug fix.
 

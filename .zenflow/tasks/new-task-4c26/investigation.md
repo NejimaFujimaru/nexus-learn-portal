@@ -97,3 +97,41 @@ However, this would require updating all code that accesses `submission.answers`
 - The fix is defensive and should not break existing functionality
 - Questions without matching answers will gracefully return `undefined` instead of crashing
 - UI already handles `undefined` answers with "No answer provided" fallback text
+
+---
+
+## Implementation Notes
+
+### Implementation Completed
+**Date**: 2026-01-18
+**File Modified**: `src/pages/teacher/SubmissionReview.tsx:215-221`
+
+### Changes Made
+Updated the `getAnswerForQuestion` function to include null safety checks:
+
+```typescript
+const getAnswerForQuestion = (questionId: string) => {
+  if (!submission.answers || !Array.isArray(submission.answers)) {
+    return undefined;
+  }
+  const answer = submission.answers.find(a => a.questionId === questionId);
+  return answer?.answer;
+};
+```
+
+**Key improvements**:
+1. Added check for `undefined` or `null` `submission.answers`
+2. Added `Array.isArray()` validation to ensure the field is an array
+3. Returns `undefined` gracefully when answers are missing
+4. Prevents `TypeError: Cannot read properties of undefined (reading 'find')` crash
+
+### Testing
+The fix addresses the crash scenario where:
+- `submission.answers` is `undefined`
+- `submission.answers` is `null`
+- `submission.answers` is not an array
+
+The UI already handles `undefined` return values properly, displaying appropriate fallback text for questions without answers.
+
+### Result
+✅ Bug fixed - Teacher dashboard will no longer crash when reviewing submissions with missing or invalid `answers` field
