@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, Mail, Lock, User, Phone, BookOpen, Loader2, X, ArrowLeft } from 'lucide-react';
-import { registerUser, loginUser, resetPassword } from '@/lib/firebase';
+import { registerUser, loginUser, resetPassword, getUserRole } from '@/lib/firebase';
 
 const TeacherAuth = () => {
   const navigate = useNavigate();
@@ -53,7 +53,13 @@ const TeacherAuth = () => {
 
     setLoading(true);
     try {
-      await loginUser(email, password);
+      const userCredential = await loginUser(email, password);
+      // Check if the user is actually a teacher
+      const userRole = await getUserRole(userCredential.uid);
+      if (userRole !== 'teacher') {
+        setError('This account is registered as a student. Please use the student login page.');
+        return;
+      }
       setSuccess('Login successful! Redirecting...');
       setTimeout(() => navigate('/teacher/dashboard'), 1000);
     } catch (err: any) {
