@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Clock, Save, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -13,10 +13,13 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { dbOperations, Test, Question } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
+import { callOpenRouterWithFallback } from '@/lib/openrouter-helper';
 
 const TestInterface = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isPractice = searchParams.get('practice') === 'true';
   const { user } = useAuth();
   const [test, setTest] = useState<Test | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -24,6 +27,7 @@ const TestInterface = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | number>>({});
   const [loading, setLoading] = useState(true);
+  const [grading, setGrading] = useState(false);
 
   useEffect(() => {
     const loadTest = async () => {

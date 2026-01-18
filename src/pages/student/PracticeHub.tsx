@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { dbOperations, Test, Submission } from '@/lib/firebase';
+import { dbOperations, Test, PracticeSubmission, Submission } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 
 const PracticeHub = () => {
@@ -26,37 +26,59 @@ const PracticeHub = () => {
   const studentId = user?.uid || '';
   
   const [tests, setTests] = useState<Test[]>([]);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [practiceSubs, setPracticeSubs] = useState<PracticeSubmission[]>([]);
+  const [studentSubs, setStudentSubs] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubTests = dbOperations.subscribeToTests((data) => {
-      setTests(data.filter(t => t.published));
+      setTests(data.filter((t) => t.published));
     });
-    const unsubSubmissions = dbOperations.subscribeToSubmissions((data) => {
-      setSubmissions(data.filter(s => s.studentId === studentId));
+
+    (async () => {
+      const [practice, normal] = await Promise.all([
+        dbOperations.getPracticeSubmissionsByStudent(studentId),
+        dbOperations.getSubmissionsByStudent(studentId),
+      ]);
+      setPracticeSubs(practice);
+      setStudentSubs(normal);
       setLoading(false);
-    });
-    return () => { 
-      unsubTests(); 
-      unsubSubmissions(); 
+    })();
+
+    return () => {
+      unsubTests();
     };
   }, [studentId]);
 
-  // Get completed tests with submissions
-  const completedTestIds = submissions.map(s => s.testId);
-  const completedTests = tests.filter(t => completedTestIds.includes(t.id));
+  // Get completed real tests (for re-practice list).
+  // Use student's normal submissions so archived/past tests still appear as long as the test exists.
+  const completedTestIds = Array.from(
+    new Set(studentSubs.map((s) => s.testId)),
+  );
+  const completedTests = tests.filter((t) => completedTestIds.includes(t.id));
   
-  // Calculate stats
-  const totalQuestionsPracticed = submissions.reduce((acc, s) => acc + (s.answers?.length || 0), 0);
-  const gradedSubmissions = submissions.filter(s => s.status === 'graded');
-  const totalScore = gradedSubmissions.reduce((acc, s) => acc + (s.finalScore || s.totalAutoScore || 0), 0);
-  const avgAccuracy = gradedSubmissions.length > 0 
-    ? Math.round((totalScore / (gradedSubmissions.length * 100)) * 100) 
-    : 0;
+  // Calculate stats from practice submissions only
+  const totalQuestionsPracticed = practiceSubs.reduce(
+    (acc, s) => acc + (s.answers?.length || 0),
+    0,
+  );
+  const avgAccuracy =
+    practiceSubs.length > 0
+      ? Math.round(
+          practiceSubs.reduce((acc, s) => acc + (s.accuracyPercent || 0), 0) /
+            practiceSubs.length,
+        )
+      : 0;
   
-  // Calculate streak (mock - would need real data)
-  const practiceStreak = Math.min(submissions.length, 7);
+  // Basic streak: distinct days with practice submissions (can be refined later)
+  const uniqueDays = Array.from(
+    new Set(
+      practiceSubs
+        .map((s) => (s.submittedAt ? s.submittedAt.slice(0, 10) : ''))
+        .filter(Boolean),
+    ),
+  );
+  const practiceStreak = uniqueDays.length;
 
   const stats = [
     { icon: Flame, label: 'Day Streak', value: practiceStreak, color: 'text-orange-500' },
@@ -154,7 +176,7 @@ const PracticeHub = () => {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {completedTests.map((test) => {
-                    const submission = submissions.find(s => s.testId === test.id);
+                    const submission = studentSubs.find(s => s.testId === test.id);
                     return (
                       <Card key={test.id} className="bg-card hover:shadow-md transition-shadow">
                         <CardHeader className="p-4 pb-2">

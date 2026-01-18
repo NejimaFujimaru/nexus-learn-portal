@@ -1,4 +1,4 @@
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { dbOperations, Test } from '@/lib/firebase';
@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 const TestInstructions = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [accepted, setAccepted] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
@@ -149,7 +150,11 @@ const TestInstructions = () => {
                 size="sm"
                 disabled={!accepted}
                 className="w-full sm:w-auto"
-                onClick={() => navigate(`/student/test/${testId}/take`)}
+                onClick={() => {
+                  const query = searchParams.toString();
+                  const suffix = query ? `?${query}` : '';
+                  navigate(`/student/test/${testId}/take${suffix}`);
+                }}
               >
                 Start Test
               </Button>
