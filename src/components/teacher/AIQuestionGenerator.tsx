@@ -618,7 +618,20 @@ OUTPUT ONLY THE JSON ARRAY:`;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2 w-full sm:w-auto">
+        <Button 
+          className="relative gap-2 w-full md:w-auto text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+          style={{
+            background: 'linear-gradient(45deg, #8B5CF6, #D946EF, #F97316)',
+          }}
+        >
+          {/* White star on top left */}
+          <svg 
+            viewBox="0 0 24 24" 
+            fill="white" 
+            className="absolute -top-1 -left-1 w-4 h-4 drop-shadow"
+          >
+            <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" />
+          </svg>
           <Sparkles className="h-4 w-4" />
           <span className="hidden xs:inline">AI</span> Generate Questions
         </Button>
