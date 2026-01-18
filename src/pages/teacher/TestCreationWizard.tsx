@@ -31,6 +31,9 @@ import { AIQuestionGenerator } from '@/components/teacher/AIQuestionGenerator';
 import { getSubjects, database, dbOperations } from '@/lib/firebase';
 import { ref, get, push, set } from 'firebase/database';
 import { toast } from '@/hooks/use-toast';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Question {
   id: string;
@@ -52,6 +55,123 @@ interface Chapter {
   title: string;
   content: string;
 }
+
+// Sortable Question Item Component
+interface SortableQuestionItemProps {
+  question: Question;
+  index: number;
+  expandedQuestions: string[];
+  toggleExpanded: (id: string) => void;
+  removeQuestion: (id: string) => void;
+}
+
+const SortableQuestionItem = ({
+  question,
+  index,
+  expandedQuestions,
+  toggleExpanded,
+  removeQuestion
+}: SortableQuestionItemProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: question.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Collapsible open={expandedQuestions.includes(question.id)}>
+        <div className={`border rounded-lg p-3 ${isDragging ? 'ring-2 ring-primary' : ''}`}>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div
+                {...attributes}
+                {...listeners}
+                className="touch-none cursor-grab active:cursor-grabbing"
+              >
+                <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              </div>
+              <CollapsibleTrigger 
+                className="flex items-center gap-2 min-w-0 flex-1"
+                onClick={() => toggleExpanded(question.id)}
+              >
+                <span className="font-medium flex-shrink-0">Q{index + 1}.</span>
+                <span className="text-sm text-muted-foreground capitalize flex-shrink-0">
+                  ({question.type === 'mcq' ? 'Mcq' : question.type === 'blank' ? 'Blank' : question.type === 'short' ? 'Short' : 'Long'})
+                </span>
+                <span className="text-sm truncate min-w-0">
+                  <span className="sm:hidden">
+                    {question.text.split(' ').slice(0, 3).join(' ')}...
+                  </span>
+                  <span className="hidden sm:inline">
+                    {question.text.substring(0, 50)}...
+                  </span>
+                </span>
+              </CollapsibleTrigger>
+            </div>
+            <CollapsibleTrigger 
+              className="flex items-center gap-2"
+              onClick={() => toggleExpanded(question.id)}
+            >
+              <span className="text-sm text-muted-foreground">{question.marks} marks</span>
+              {expandedQuestions.includes(question.id) ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent className="pt-4">
+            <div className="space-y-2 pl-6">
+              <p className="font-medium">{question.text}</p>
+              {question.type === 'mcq' && question.options && (
+                <div className="space-y-1">
+                  {question.options.map((opt, i) => (
+                    <div 
+                      key={i} 
+                      className={`text-sm p-2 rounded ${
+                        question.correctAnswer === `option${i}` 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+                          : 'bg-muted'
+                      }`}
+                    >
+                      {String.fromCharCode(65 + i)}. {opt}
+                      {question.correctAnswer === `option${i}` && (
+                        <Check className="inline ml-2 h-3 w-3" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {question.type === 'blank' && (
+                <p className="text-sm">
+                  <span className="font-medium">Answer:</span> {question.correctAnswer}
+                </p>
+              )}
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={() => removeQuestion(question.id)}
+              >
+                <Trash2 className="mr-2 h-3 w-3" />
+                Remove
+              </Button>
+            </div>
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
+    </div>
+  );
+};
 
 const TestCreationWizard = () => {
   const navigate = useNavigate();
@@ -263,6 +383,25 @@ const TestCreationWizard = () => {
     setExpandedQuestions(prev => 
       prev.includes(id) ? prev.filter(q => q !== id) : [...prev, id]
     );
+  };
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setQuestions((items) => {
+        const oldIndex = items.findIndex((q) => q.id === active.id);
+        const newIndex = items.findIndex((q) => q.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
   };
 
   const handleChapterToggle = (chapterId: string) => {
@@ -515,21 +654,25 @@ const TestCreationWizard = () => {
             {/* AI Question Generator */}
             <Card>
               <CardHeader className="space-y-3">
-                <CardTitle className="flex items-center gap-2">
-                  <Plus className="h-5 w-5" />
-                  Add Questions
-                </CardTitle>
-                <CardDescription>
-                  Add questions manually or use AI to generate them from chapter content
-                </CardDescription>
-                <AIQuestionGenerator
-                  selectedChapters={selectedChapters}
-                  chapters={subjectChapters}
-                  totalMarks={totalMarks}
-                  currentQuestionMarks={totalQuestionMarks}
-                  subjectName={selectedSubjectData?.name || 'Unknown Subject'}
-                  onQuestionsGenerated={addGeneratedQuestions}
-                />
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Plus className="h-5 w-5" />
+                      Add Questions
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      Add questions manually or use AI to generate them from chapter content
+                    </CardDescription>
+                  </div>
+                  <AIQuestionGenerator
+                    selectedChapters={selectedChapters}
+                    chapters={subjectChapters}
+                    totalMarks={totalMarks}
+                    currentQuestionMarks={totalQuestionMarks}
+                    subjectName={selectedSubjectData?.name || 'Unknown Subject'}
+                    onQuestionsGenerated={addGeneratedQuestions}
+                  />
+                </div>
               </CardHeader>
             </Card>
 
@@ -655,7 +798,7 @@ const TestCreationWizard = () => {
                   <CardTitle>Questions ({questions.length})</CardTitle>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="destructive"
                     size="sm"
                     onClick={clearAllQuestions}
                   >
@@ -664,77 +807,27 @@ const TestCreationWizard = () => {
                   </Button>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {questions.map((question, index) => (
-                    <Collapsible key={question.id} open={expandedQuestions.includes(question.id)}>
-                      <div className="border rounded-lg p-3">
-                        <CollapsibleTrigger 
-                          className="flex items-center justify-between w-full"
-                          onClick={() => toggleExpanded(question.id)}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
-                            <span className="font-medium flex-shrink-0">Q{index + 1}.</span>
-                            <span className="text-sm text-muted-foreground capitalize flex-shrink-0">
-                              ({question.type === 'mcq' ? 'Mcq' : question.type === 'blank' ? 'Blank' : question.type === 'short' ? 'Short' : 'Long'})
-                            </span>
-                            <span className="text-sm truncate min-w-0">
-                              <span className="sm:hidden">
-                                {question.text.split(' ').slice(0, 3).join(' ')}...
-                              </span>
-                              <span className="hidden sm:inline">
-                                {question.text.substring(0, 50)}...
-                              </span>
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">{question.marks} marks</span>
-                            {expandedQuestions.includes(question.id) ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="pt-4">
-                          <div className="space-y-2 pl-6">
-                            <p className="font-medium">{question.text}</p>
-                            {question.type === 'mcq' && question.options && (
-                              <div className="space-y-1">
-                                {question.options.map((opt, i) => (
-                                  <div 
-                                    key={i} 
-                                    className={`text-sm p-2 rounded ${
-                                      question.correctAnswer === `option${i}` 
-                                        ? 'bg-green-100 text-green-800' 
-                                        : 'bg-muted'
-                                    }`}
-                                  >
-                                    {String.fromCharCode(65 + i)}. {opt}
-                                    {question.correctAnswer === `option${i}` && (
-                                      <Check className="inline ml-2 h-3 w-3" />
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {question.type === 'blank' && (
-                              <p className="text-sm">
-                                <span className="font-medium">Answer:</span> {question.correctAnswer}
-                              </p>
-                            )}
-                            <Button 
-                              variant="destructive" 
-                              size="sm"
-                              onClick={() => removeQuestion(question.id)}
-                            >
-                              <Trash2 className="mr-2 h-3 w-3" />
-                              Remove
-                            </Button>
-                          </div>
-                        </CollapsibleContent>
-                      </div>
-                    </Collapsible>
-                  ))}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={questions.map(q => q.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {questions.map((question, index) => (
+                        <SortableQuestionItem
+                          key={question.id}
+                          question={question}
+                          index={index}
+                          expandedQuestions={expandedQuestions}
+                          toggleExpanded={toggleExpanded}
+                          removeQuestion={removeQuestion}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </CardContent>
               </Card>
             )}
