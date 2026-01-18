@@ -1,0 +1,1 @@
+Always update the README2.md file on every new feaure addition whether it's your OR Lovable's

@@ -33,9 +33,28 @@ const AcademicHistory = () => {
     return () => { unsubTests(); unsubSubmissions(); };
   }, [studentId]);
 
-  const submittedTestIds = submissions.map(s => s.testId);
-  const completedTests = tests.filter(t => submittedTestIds.includes(t.id));
-  const upcomingTests = tests.filter(t => !submittedTestIds.includes(t.id));
+  const submittedTestIds = submissions.map((s) => s.testId);
+  const completedTests = tests.filter((t) => submittedTestIds.includes(t.id));
+  const upcomingTests = tests.filter((t) => !submittedTestIds.includes(t.id));
+  
+  // Compute avg and best percentages using real totalMarks
+  const gradedSubmissions = submissions.filter((s) => s.status === 'graded');
+  const scoredWithTests = gradedSubmissions.map((s) => {
+    const relatedTest = tests.find((t) => t.id === s.testId);
+    const possible = relatedTest?.totalMarks ?? 100;
+    const obtained = s.finalScore ?? s.totalAutoScore ?? 0;
+    return { obtained, possible };
+  });
+  const totalObtained = scoredWithTests.reduce((acc, v) => acc + v.obtained, 0);
+  const totalPossible = scoredWithTests.reduce((acc, v) => acc + v.possible, 0);
+  const averageScore = totalPossible > 0 ? Math.round((totalObtained / totalPossible) * 100) : 0;
+  const highestScore = scoredWithTests.length > 0
+    ? Math.round(
+        Math.max(
+          ...scoredWithTests.map((v) => (v.possible > 0 ? (v.obtained / v.possible) * 100 : 0)),
+        ),
+      )
+    : 0;
   
   const getGradeColor = (percentage?: number) => {
     if (!percentage) return 'text-muted-foreground';
@@ -46,13 +65,7 @@ const AcademicHistory = () => {
     return 'text-destructive';
   };
 
-  const averageScore = submissions.length > 0 && submissions.some(s => s.totalAutoScore !== undefined)
-    ? Math.round(submissions.reduce((acc, s) => acc + (s.totalAutoScore || 0), 0) / submissions.length)
-    : 0;
-
-  const highestScore = submissions.length > 0 && submissions.some(s => s.totalAutoScore !== undefined)
-    ? Math.max(...submissions.map(s => s.totalAutoScore || 0))
-    : 0;
+  // averageScore and highestScore now computed above using real totals
 
   return (
     <DashboardLayout userType="student" userName={userName}>

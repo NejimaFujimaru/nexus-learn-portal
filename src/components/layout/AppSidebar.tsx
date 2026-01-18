@@ -45,6 +45,7 @@ const studentMenuItems = [
 export const AppSidebar = ({ userType, userName = 'User' }: AppSidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -110,50 +111,71 @@ export const AppSidebar = ({ userType, userName = 'User' }: AppSidebarProps) => 
         ))}
       </nav>
 
-      {/* Account Section */}
-      <div className="border-t border-border p-3 space-y-1">
-        <Link
-          to="/settings"
-          onClick={() => setMobileOpen(false)}
-          className={cn(
-            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-            "hover:bg-accent hover:text-accent-foreground",
-            isActive('/settings') 
-              ? "bg-primary text-primary-foreground" 
-              : "text-muted-foreground",
-            collapsed && "justify-center px-2"
-          )}
-        >
-          <Settings className="h-5 w-5 shrink-0" />
-          {!collapsed && <span className="font-medium">Settings</span>}
-        </Link>
-        
+      {/* Account Section with User Card Drop-up */}
+      <div className="border-t border-border p-3 space-y-1 relative">
+        {/* User card acts as toggle */}
         <button
-          onClick={handleLogout}
+          type="button"
+          onClick={() => setUserMenuOpen((open) => !open)}
           className={cn(
-            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 w-full",
-            "hover:bg-destructive/10 text-muted-foreground hover:text-destructive",
-            collapsed && "justify-center px-2"
+            "w-full flex items-center gap-3 px-3 py-3 bg-accent/60 rounded-lg transition-all duration-200",
+            "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+            collapsed && "justify-center px-2",
           )}
         >
-          <LogOut className="h-5 w-5 shrink-0" />
-          {!collapsed && <span className="font-medium">Logout</span>}
-        </button>
-
-        {/* User Info */}
-        {!collapsed && (
-          <div className="flex items-center gap-3 px-3 py-3 mt-2 bg-accent/50 rounded-lg">
-            <Avatar className="h-9 w-9">
-              <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                {userName.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="overflow-hidden">
+          <Avatar className="h-9 w-9">
+            <AvatarFallback className="bg-primary/10 text-primary text-sm">
+              {userName.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          {!collapsed && (
+            <div className="flex-1 overflow-hidden text-left">
               <p className="text-sm font-medium text-foreground truncate">{userName}</p>
               <p className="text-xs text-muted-foreground capitalize">{userType}</p>
             </div>
-          </div>
-        )}
+          )}
+        </button>
+
+        {/* Drop-up actions: Settings + Logout (appear ABOVE the card, sliding upward) */}
+        <div
+          className={cn(
+            "absolute left-3 right-3 bottom-14 origin-bottom transition-all duration-200 ease-out",
+            userMenuOpen
+              ? "opacity-100 translate-y-0 pointer-events-auto"
+              : "opacity-0 translate-y-4 pointer-events-none",
+          )}
+        >
+          <Link
+            to="/settings"
+            onClick={() => {
+              setMobileOpen(false);
+              setUserMenuOpen(false);
+            }}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+              "hover:bg-accent hover:text-accent-foreground",
+              isActive('/settings')
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground",
+              collapsed && "justify-center px-2",
+            )}
+          >
+            <Settings className="h-5 w-5 shrink-0" />
+            {!collapsed && <span className="font-medium">Settings</span>}
+          </Link>
+
+          <button
+            onClick={handleLogout}
+            className={cn(
+              "mt-1 flex items-center gap-3 px-3 py-2 rounded-lg w-full text-sm transition-colors",
+              "hover:bg-destructive/10 text-muted-foreground hover:text-destructive",
+              collapsed && "justify-center px-2",
+            )}
+          >
+            <LogOut className="h-5 w-5 shrink-0" />
+            {!collapsed && <span className="font-medium">Logout</span>}
+          </button>
+        </div>
       </div>
 
     </div>
@@ -184,12 +206,12 @@ export const AppSidebar = ({ userType, userName = 'User' }: AppSidebarProps) => 
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed md:relative h-screen bg-card border-r border-border z-40",
+          "fixed inset-y-0 left-0 h-screen bg-card border-r border-border z-40 flex flex-col",
           "transition-all duration-300 ease-in-out",
-          // Desktop
+          // Desktop width
           collapsed ? "md:w-16" : "md:w-60",
-          // Mobile
-          mobileOpen ? "translate-x-0 w-60" : "-translate-x-full md:translate-x-0"
+          // Mobile offcanvas translate
+          mobileOpen ? "translate-x-0 w-60" : "-translate-x-full md:translate-x-0",
         )}
       >
         <SidebarContent />

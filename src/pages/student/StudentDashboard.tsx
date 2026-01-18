@@ -32,10 +32,16 @@ const StudentDashboard = () => {
   const pendingTests = tests.filter(t => !submittedTestIds.includes(t.id));
   const completedTests = tests.filter(t => submittedTestIds.includes(t.id));
 
-  // Calculate performance stats
-  const gradedSubmissions = submissions.filter(s => s.status === 'graded');
-  const totalScore = gradedSubmissions.reduce((acc, s) => acc + (s.finalScore || s.totalAutoScore || 0), 0);
-  const totalPossible = gradedSubmissions.length * 100; // Assume 100 marks per test as default
+  // Calculate performance stats using real totalMarks per test
+  const gradedSubmissions = submissions.filter((s) => s.status === 'graded');
+  const scoredWithTests = gradedSubmissions.map((s) => {
+    const relatedTest = tests.find((t) => t.id === s.testId);
+    const possible = relatedTest?.totalMarks ?? 100; // fallback to 100 if missing
+    const obtained = s.finalScore ?? s.totalAutoScore ?? 0;
+    return { obtained, possible };
+  });
+  const totalScore = scoredWithTests.reduce((acc, v) => acc + v.obtained, 0);
+  const totalPossible = scoredWithTests.reduce((acc, v) => acc + v.possible, 0);
   const averageScore = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
 
   const stats = [
