@@ -36,24 +36,35 @@ const ManageStudents = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Subscribe to students (users with role 'student')
-    const usersRef = ref(database, 'users');
-    const unsubUsers = onValue(usersRef, (snapshot) => {
+    if (!user) return;
+
+    // Subscribe to teacher's own students (stored in teacherStudents/{teacherId})
+    const teacherStudentsRef = ref(database, `teacherStudents/${user.uid}`);
+    const unsubTeacherStudents = onValue(teacherStudentsRef, async (snapshot) => {
       if (!snapshot.exists()) {
         setStudents([]);
         setLoading(false);
         return;
       }
-      const data = snapshot.val();
-      const studentList: Student[] = Object.entries(data)
-        .filter(([_, value]: any) => value.role === 'student')
-        .map(([id, value]: any) => ({
-          id,
-          email: value.email,
-          displayName: value.displayName,
-          phone: value.phone,
-          createdAt: value.createdAt
-        }));
+      const studentIds = Object.keys(snapshot.val());
+      
+      // Fetch each student's details
+      const studentPromises = studentIds.map(async (studentId) => {
+        const studentSnapshot = await get(ref(database, `users/${studentId}`));
+        if (studentSnapshot.exists()) {
+          const data = studentSnapshot.val();
+          return {
+            id: studentId,
+            email: data.email,
+            displayName: data.displayName,
+            phone: data.phone,
+            createdAt: data.createdAt
+          } as Student;
+        }
+        return null;
+      });
+      
+      const studentList = (await Promise.all(studentPromises)).filter(Boolean) as Student[];
       setStudents(studentList);
       setLoading(false);
     });
@@ -62,26 +73,49 @@ const ManageStudents = () => {
     const unsubTests = dbOperations.subscribeToTests(setTests);
 
     return () => {
-      unsubUsers();
+      unsubTeacherStudents();
       unsubTests();
     };
-  }, []);
+  }, [user]);
 
   const handleAddStudent = async () => {
+    if (!user) return;
     if (!newStudentEmail.trim() || !newStudentName.trim()) {
       toast({ title: "Please fill in all fields", variant: "destructive" });
       return;
     }
 
     try {
-      const newRef = push(ref(database, 'users'));
-      await set(newRef, {
-        email: newStudentEmail,
-        displayName: newStudentName,
-        role: 'student',
-        createdAt: Date.now()
-      });
-      toast({ title: "Student added successfully" });
+      // Find if a student with this email already exists
+      const usersSnapshot = await get(ref(database, 'users'));
+      let existingStudentId: string | null = null;
+      
+      if (usersSnapshot.exists()) {
+        const users = usersSnapshot.val();
+        for (const [uid, userData] of Object.entries(users) as [string, any][]) {
+          if (userData.email === newStudentEmail && userData.role === 'student') {
+            existingStudentId = uid;
+            break;
+          }
+        }
+      }
+
+      if (existingStudentId) {
+        // Add existing student to teacher's list
+        await set(ref(database, `teacherStudents/${user.uid}/${existingStudentId}`), true);
+        toast({ title: "Existing student added to your list" });
+      } else {
+        // Create a placeholder student entry (they'll need to register themselves)
+        const newRef = push(ref(database, 'pendingStudents'));
+        await set(newRef, {
+          email: newStudentEmail,
+          displayName: newStudentName,
+          teacherId: user.uid,
+          createdAt: Date.now()
+        });
+        toast({ title: "Student invitation created. They need to register with this email." });
+      }
+      
       setNewStudentEmail('');
       setNewStudentName('');
     } catch (error) {
@@ -90,9 +124,11 @@ const ManageStudents = () => {
   };
 
   const handleRemoveStudent = async (studentId: string) => {
+    if (!user) return;
     try {
-      await remove(ref(database, `users/${studentId}`));
-      toast({ title: "Student removed" });
+      // Only remove from teacher's student list, not delete the user
+      await remove(ref(database, `teacherStudents/${user.uid}/${studentId}`));
+      toast({ title: "Student removed from your list" });
       setSelectedStudents(prev => prev.filter(id => id !== studentId));
     } catch (error) {
       toast({ title: "Error removing student", variant: "destructive" });

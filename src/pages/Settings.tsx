@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
-import { ArrowLeft, User, Settings as SettingsIcon, Shield, Moon, Sun, Bell, Globe, Lock, AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, User, Settings as SettingsIcon, Shield, Moon, Sun, Bell, Globe, Lock, AlertTriangle, Check, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,22 +8,26 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
-import { updateProfile } from 'firebase/auth';
-import { ref, update } from 'firebase/database';
+import { updateProfile, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { ref, update, remove } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { toast } from '@/hooks/use-toast';
 
 const Settings = () => {
-  const { user, role } = useAuth();
+  const { user, role, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const navigate = useNavigate();
   const [displayName, setDisplayName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [isSavingName, setIsSavingName] = useState(false);
   const [language, setLanguage] = useState('en');
   const [notifications, setNotifications] = useState(true);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
   
   const userName = user?.displayName || user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || '';
@@ -54,6 +58,43 @@ const Settings = () => {
   const handleThemeChange = (value: string) => {
     setTheme(value);
     toast({ title: `Theme changed to ${value}` });
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user || !deletePassword) {
+      toast({ title: "Please enter your password to confirm", variant: "destructive" });
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    try {
+      // Re-authenticate user before deletion
+      const credential = EmailAuthProvider.credential(user.email!, deletePassword);
+      await reauthenticateWithCredential(user, credential);
+      
+      // Delete user data from database
+      await remove(ref(database, `users/${user.uid}`));
+      
+      // Delete from teacherStudents if they're a student in any teacher's list
+      // (This is handled by the teacher, no need to clean up here)
+      
+      // Delete the Firebase auth user
+      await deleteUser(user);
+      
+      toast({ title: "Account deleted successfully" });
+      navigate('/');
+    } catch (error: any) {
+      if (error.code === 'auth/wrong-password') {
+        toast({ title: "Incorrect password", variant: "destructive" });
+      } else if (error.code === 'auth/requires-recent-login') {
+        toast({ title: "Please log out and log back in before deleting your account", variant: "destructive" });
+      } else {
+        toast({ title: "Failed to delete account: " + error.message, variant: "destructive" });
+      }
+    } finally {
+      setIsDeletingAccount(false);
+      setDeletePassword('');
+    }
   };
 
   return (
@@ -283,15 +324,60 @@ const Settings = () => {
 
               <Separator />
 
-              {/* Delete Account Warning */}
-              <div className="flex items-start gap-3 p-4 bg-destructive/10 rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
-                <div>
-                  <p className="font-medium text-destructive">Danger Zone</p>
-                  <p className="text-sm text-muted-foreground">
-                    Account deletion is permanent and cannot be undone. All your data, including tests and submissions, will be permanently removed.
-                  </p>
+              {/* Delete Account */}
+              <div className="flex flex-col gap-4 p-4 bg-destructive/10 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-destructive">Danger Zone</p>
+                    <p className="text-sm text-muted-foreground">
+                      Account deletion is permanent and cannot be undone. All your data, including tests and submissions, will be permanently removed.
+                    </p>
+                  </div>
                 </div>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full sm:w-auto">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete My Account
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete your account and remove all your data from our servers.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="py-4">
+                      <Label htmlFor="delete-password">Enter your password to confirm</Label>
+                      <Input
+                        id="delete-password"
+                        type="password"
+                        placeholder="Your password"
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setDeletePassword('')}>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteAccount}
+                        disabled={isDeletingAccount || !deletePassword}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {isDeletingAccount ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-2" />
+                        )}
+                        Delete Account
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </CardContent>
           </Card>
