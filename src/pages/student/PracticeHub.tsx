@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { dbOperations, Test, PracticeSubmission, Submission } from '@/lib/firebase';
+import { dbOperations, Test, Submission } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 
 const PracticeHub = () => {
@@ -26,7 +26,6 @@ const PracticeHub = () => {
   const studentId = user?.uid || '';
   
   const [tests, setTests] = useState<Test[]>([]);
-  const [practiceSubs, setPracticeSubs] = useState<PracticeSubmission[]>([]);
   const [studentSubs, setStudentSubs] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,12 +35,8 @@ const PracticeHub = () => {
     });
 
     (async () => {
-      const [practice, normal] = await Promise.all([
-        dbOperations.getPracticeSubmissionsByStudent(studentId),
-        dbOperations.getSubmissionsByStudent(studentId),
-      ]);
-      setPracticeSubs(practice);
-      setStudentSubs(normal);
+      const subs = await dbOperations.getSubmissionsByStudent(studentId);
+      setStudentSubs(subs);
       setLoading(false);
     })();
 
@@ -57,23 +52,25 @@ const PracticeHub = () => {
   );
   const completedTests = tests.filter((t) => completedTestIds.includes(t.id));
   
-  // Calculate stats from practice submissions only
-  const totalQuestionsPracticed = practiceSubs.reduce(
+  // Calculate stats from student submissions
+  const totalQuestionsPracticed = studentSubs.reduce(
     (acc, s) => acc + (s.answers?.length || 0),
     0,
   );
   const avgAccuracy =
-    practiceSubs.length > 0
+    studentSubs.length > 0
       ? Math.round(
-          practiceSubs.reduce((acc, s) => acc + (s.accuracyPercent || 0), 0) /
-            practiceSubs.length,
+          studentSubs.reduce((acc, s) => {
+            const score = s.finalScore ?? s.totalAutoScore ?? 0;
+            return acc + score;
+          }, 0) / studentSubs.length,
         )
       : 0;
   
-  // Basic streak: distinct days with practice submissions (can be refined later)
+  // Basic streak: distinct days with submissions (can be refined later)
   const uniqueDays = Array.from(
     new Set(
-      practiceSubs
+      studentSubs
         .map((s) => (s.submittedAt ? s.submittedAt.slice(0, 10) : ''))
         .filter(Boolean),
     ),
