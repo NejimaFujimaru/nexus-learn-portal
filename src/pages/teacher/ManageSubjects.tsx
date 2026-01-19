@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { ArrowLeft, Plus, Edit2, Trash2, BookOpen, FileText, Save, X } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, BookOpen, FileText, Save, X, Upload, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { toast } from '@/hooks/use-toast';
 import { dbOperations, Subject, Chapter } from '@/lib/firebase';
+import { extractTextFromFile, getSupportedFileTypes, getFileType } from '@/lib/file-text-extractor';
 
 const ManageSubjects = () => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -20,6 +21,8 @@ const ManageSubjects = () => {
   const [editSubjectName, setEditSubjectName] = useState('');
   const [newChapter, setNewChapter] = useState<{ subjectId: string; title: string; content: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [importingFile, setImportingFile] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     const unsubscribe = dbOperations.subscribeToSubjects((data) => {
@@ -87,6 +90,54 @@ const ManageSubjects = () => {
     } catch (error) {
       toast({ title: "Error deleting chapter", variant: "destructive" });
     }
+  };
+
+  const handleFileImport = async (file: File, subjectId: string) => {
+    const fileType = getFileType(file);
+    if (!fileType) {
+      toast({ 
+        title: "Unsupported file type", 
+        description: "Please use TXT, DOCX, or PDF files.",
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    setImportingFile(subjectId);
+    try {
+      const extractedText = await extractTextFromFile(file);
+      const fileName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension for chapter title
+      
+      // Set the new chapter with extracted content
+      setNewChapter({ 
+        subjectId, 
+        title: fileName, 
+        content: extractedText 
+      });
+      
+      toast({ 
+        title: "Text extracted successfully", 
+        description: `Extracted ${extractedText.length} characters from ${file.name}` 
+      });
+    } catch (error) {
+      console.error('File extraction error:', error);
+      toast({ 
+        title: "Failed to extract text", 
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive" 
+      });
+    } finally {
+      setImportingFile(null);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, subjectId: string) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileImport(file, subjectId);
+    }
+    // Reset the input so the same file can be selected again
+    e.target.value = '';
   };
 
   const { user } = useAuth();
@@ -226,13 +277,41 @@ const ManageSubjects = () => {
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label>Content (optional)</Label>
+                              <div className="flex items-center justify-between">
+                                <Label>Content (optional)</Label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="file"
+                                    ref={(el) => { fileInputRefs.current[`edit-${subject.id}`] = el; }}
+                                    accept={getSupportedFileTypes()}
+                                    onChange={(e) => handleFileInputChange(e, subject.id)}
+                                    className="hidden"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => fileInputRefs.current[`edit-${subject.id}`]?.click()}
+                                    disabled={importingFile === subject.id}
+                                  >
+                                    {importingFile === subject.id ? (
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <Upload className="h-4 w-4 mr-2" />
+                                    )}
+                                    Import File
+                                  </Button>
+                                </div>
+                              </div>
                               <Textarea
                                 placeholder="Enter chapter content or description..."
                                 value={newChapter.content}
                                 onChange={(e) => setNewChapter({ ...newChapter, content: e.target.value })}
-                                rows={3}
+                                rows={6}
                               />
+                              <p className="text-xs text-muted-foreground">
+                                Supports TXT, DOCX, and PDF files
+                              </p>
                             </div>
                             <div className="flex gap-2">
                               <Button size="sm" onClick={handleAddChapter}>
@@ -245,15 +324,37 @@ const ManageSubjects = () => {
                             </div>
                           </div>
                         ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => setNewChapter({ subjectId: subject.id, title: '', content: '' })}
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Chapter
-                          </Button>
+                          <div className="flex gap-2">
+                            <input
+                              type="file"
+                              ref={(el) => { fileInputRefs.current[subject.id] = el; }}
+                              accept={getSupportedFileTypes()}
+                              onChange={(e) => handleFileInputChange(e, subject.id)}
+                              className="hidden"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => setNewChapter({ subjectId: subject.id, title: '', content: '' })}
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Chapter
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => fileInputRefs.current[subject.id]?.click()}
+                              disabled={importingFile === subject.id}
+                            >
+                              {importingFile === subject.id ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4 mr-2" />
+                              )}
+                              Import from File
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </AccordionContent>
