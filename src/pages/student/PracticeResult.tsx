@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import DashboardLayout from '@/components/layout/DashboardLayout';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -103,7 +103,7 @@ const PracticeResult: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout userType="student" userName={user?.displayName || 'Student'}>
         <div className="flex items-center justify-center h-[60vh]">
           <p className="text-muted-foreground">Loading practice result...</p>
         </div>
@@ -116,7 +116,7 @@ const PracticeResult: React.FC = () => {
   const { grading } = submission;
 
   return (
-    <DashboardLayout>
+    <DashboardLayout userType="student" userName={user?.displayName || 'Student'}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">

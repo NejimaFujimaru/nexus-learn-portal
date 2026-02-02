@@ -45,10 +45,19 @@ const TestInterface = () => {
   }, [testId]);
 
   useEffect(() => {
-    if (timeLeft <= 0) return;
-    const timer = setInterval(() => setTimeLeft(prev => prev > 0 ? prev - 1 : 0), 1000);
+    if (timeLeft <= 0 || loading || !test) return;
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          // Auto-submit when time runs out
+          handleSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
     return () => clearInterval(timer);
-  }, [timeLeft]);
+  }, [timeLeft, loading, test]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

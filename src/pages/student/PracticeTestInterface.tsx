@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import DashboardLayout from '@/components/layout/DashboardLayout';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -18,7 +18,7 @@ import {
   AlertCircle,
   CheckCircle2
 } from 'lucide-react';
-import { dbOperations, Test, Question } from '@/lib/firebase';
+import { dbOperations, Test, Question, getTestById } from '@/lib/firebase';
 import { gradePracticeTest, PracticeQuestion, PracticeAnswer } from '@/lib/practice-grader';
 import { addPracticeSubmission } from '@/lib/practice-db';
 import { GradingAnimation, GradingComplete } from '@/components/practice/GradingAnimation';
@@ -48,7 +48,7 @@ const PracticeTestInterface: React.FC = () => {
       if (!testId) return;
       
       try {
-        const testData = await dbOperations.getTestById(testId);
+        const testData = await getTestById(testId);
         if (!testData) {
           toast.error('Test not found');
           navigate('/student/practice');
@@ -183,7 +183,7 @@ const PracticeTestInterface: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout userType="student" userName={user?.displayName || 'Student'}>
         <div className="flex items-center justify-center h-[60vh]">
           <p className="text-muted-foreground">Loading practice test...</p>
         </div>
@@ -193,7 +193,7 @@ const PracticeTestInterface: React.FC = () => {
 
   if (viewState === 'grading') {
     return (
-      <DashboardLayout>
+      <DashboardLayout userType="student" userName={user?.displayName || 'Student'}>
         <Card>
           <GradingAnimation stage={gradingStage} progress={gradingProgress} />
         </Card>
@@ -203,7 +203,7 @@ const PracticeTestInterface: React.FC = () => {
 
   if (viewState === 'complete' && gradingResult) {
     return (
-      <DashboardLayout>
+      <DashboardLayout userType="student" userName={user?.displayName || 'Student'}>
         <Card>
           <GradingComplete 
             score={gradingResult.score} 
@@ -216,7 +216,7 @@ const PracticeTestInterface: React.FC = () => {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout userType="student" userName={user?.displayName || 'Student'}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

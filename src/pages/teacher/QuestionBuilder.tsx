@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Header } from '@/components/layout/Header';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ArrowLeft, Plus, Trash2, Save, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MCQQuestion {
   id: string;
@@ -32,7 +33,10 @@ interface ShortAnswerQuestion {
 
 const QuestionBuilder = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('mcq');
+  
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Teacher';
   
   const [mcqQuestions, setMcqQuestions] = useState<MCQQuestion[]>([
     { id: '1', question: '', options: ['', '', '', ''], correctAnswer: 0 }
@@ -128,9 +132,7 @@ const QuestionBuilder = () => {
   const totalQuestions = mcqQuestions.length + fillBlankQuestions.length + shortAnswerQuestions.length;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header userType="teacher" userName="Dr. Sarah Mitchell" />
-      
+    <DashboardLayout userType="teacher" userName={userName}>
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link 
           to="/teacher/create-test" 
@@ -316,7 +318,7 @@ const QuestionBuilder = () => {
           </Button>
         </div>
       </main>
-    </div>
+    </DashboardLayout>
   );
 };
 

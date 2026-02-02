@@ -35,6 +35,8 @@ import ManageTests from "./pages/teacher/ManageTests";
 
 // Additional Student Pages
 import PracticeHub from "./pages/student/PracticeHub";
+import PracticeTestInterface from "./pages/student/PracticeTestInterface";
+import PracticeResult from "./pages/student/PracticeResult";
 import StudentClass from "./pages/student/StudentClass";
 
 // Shared Pages
@@ -96,6 +98,21 @@ const App = () => (
             <Route path="/student/practice-hub" element={
               <ProtectedRoute allowedRole="student">
                 <PracticeHub />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/practice" element={
+              <ProtectedRoute allowedRole="student">
+                <PracticeHub />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/practice-test/:testId" element={
+              <ProtectedRoute allowedRole="student">
+                <PracticeTestInterface />
+              </ProtectedRoute>
+            } />
+            <Route path="/student/practice-result/:submissionId" element={
+              <ProtectedRoute allowedRole="student">
+                <PracticeResult />
               </ProtectedRoute>
             } />
             <Route path="/student/class" element={
