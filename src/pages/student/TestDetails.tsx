@@ -1,6 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Header } from '@/components/layout/Header';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { dbOperations, Test } from '@/lib/firebase';
 import { ArrowLeft, Calendar, Clock, FileText, BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,19 +35,17 @@ const TestDetails = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header userType="student" userName={userName} />
+      <DashboardLayout userType="student" userName={userName}>
         <main className="max-w-4xl mx-auto px-4 py-8 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </main>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (!test) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header userType="student" userName={userName} />
+      <DashboardLayout userType="student" userName={userName}>
         <main className="max-w-4xl mx-auto px-4 py-8">
           <Card className="bg-card">
             <CardContent className="flex flex-col items-center justify-center py-12">
@@ -59,14 +57,12 @@ const TestDetails = () => {
             </CardContent>
           </Card>
         </main>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header userType="student" userName={userName} />
-      
+    <DashboardLayout userType="student" userName={userName}>
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link 
           to="/student/dashboard" 
@@ -159,7 +155,7 @@ const TestDetails = () => {
           </CardContent>
         </Card>
       </main>
-    </div>
+    </DashboardLayout>
   );
 };
 

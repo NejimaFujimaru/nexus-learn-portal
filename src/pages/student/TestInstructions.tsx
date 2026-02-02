@@ -1,6 +1,6 @@
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Header } from '@/components/layout/Header';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { dbOperations, Test } from '@/lib/firebase';
 import { ArrowLeft, AlertTriangle, CheckCircle2, Brain, Clock, Shield, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,9 +37,10 @@ const TestInstructions = () => {
 
   const instructions = [
     'Read each question carefully before answering.',
-    'You cannot go back to previous questions once submitted.',
+    'You can navigate between questions freely using the Previous and Next buttons.',
     'Your answers are auto-saved every 30 seconds.',
     'The timer will continue even if you close the browser.',
+    'When the timer reaches zero, the test will be automatically submitted.',
     'Ensure stable internet connection throughout the test.',
     'Do not use any external resources unless specified.',
     'Contact support immediately if you face technical issues.',
@@ -47,12 +48,11 @@ const TestInstructions = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header userType="student" userName={userName} />
+      <DashboardLayout userType="student" userName={userName}>
         <main className="max-w-4xl mx-auto px-4 py-8 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </main>
-      </div>
+      </DashboardLayout>
     );
   }
 
@@ -62,9 +62,7 @@ const TestInstructions = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header userType="student" userName={userName} />
-      
+    <DashboardLayout userType="student" userName={userName}>
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link 
           to={`/student/test/${testId}/details`}
@@ -162,7 +160,7 @@ const TestInstructions = () => {
           </CardContent>
         </Card>
       </main>
-    </div>
+    </DashboardLayout>
   );
 };
 
