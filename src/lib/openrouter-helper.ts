@@ -20,6 +20,10 @@ export interface OpenRouterChatParams {
   maxTokens?: number;
 }
 
+// Retry configuration
+const MAX_RETRIES_PER_MODEL = 2;
+const INITIAL_BACKOFF_MS = 1000;
+
 export const getOpenRouterApiKey = async (): Promise<string> => {
   // Preferred new location
   const primaryRef = ref(database, 'config/openrouter/apiKey');
@@ -44,114 +48,195 @@ export const getOpenRouterApiKey = async (): Promise<string> => {
   return key;
 };
 
+// Helper to sleep for exponential backoff
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Strip markdown code blocks from response
+const stripMarkdownCodeBlocks = (content: string): string => {
+  let cleaned = content.trim();
+  
+  // Remove ```json ... ``` or ``` ... ``` blocks
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '');
+  cleaned = cleaned.replace(/\s*```$/i, '');
+  
+  // Also handle case where content might have multiple code blocks
+  cleaned = cleaned.replace(/```(?:json)?\s*([\s\S]*?)\s*```/gi, '$1');
+  
+  return cleaned.trim();
+};
+
+// Extract JSON from potentially messy AI response
+const extractJSON = (content: string): string => {
+  let cleaned = stripMarkdownCodeBlocks(content);
+  
+  // Remove DeepSeek reasoning blocks
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  
+  // Try to find JSON array or object
+  const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+  const objectMatch = cleaned.match(/\{[\s\S]*\}/);
+  
+  if (arrayMatch) {
+    return arrayMatch[0];
+  }
+  if (objectMatch) {
+    return objectMatch[0];
+  }
+  
+  return cleaned;
+};
+
+// Make a single API call to a specific model
+const callModel = async (
+  model: string,
+  params: OpenRouterChatParams,
+  apiKey: string
+): Promise<{ success: boolean; content?: string; error?: string; retryable: boolean }> => {
+  const temperature = params.temperature ?? 0.4;
+  const maxTokens = params.maxTokens ?? 1200;
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'Nexus Learn',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: params.systemMessage },
+          { role: 'user', content: params.userMessage },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    });
+
+    const rawText = await response.text();
+
+    if (!response.ok) {
+      let payload: any = null;
+      try {
+        payload = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        payload = null;
+      }
+
+      const message: string =
+        payload?.error?.message ||
+        (response.status === 401
+          ? 'Invalid or missing OpenRouter API key.'
+          : response.status === 403
+          ? 'Access to this model is forbidden. Check your OpenRouter account.'
+          : response.status === 404
+          ? 'Model not found on OpenRouter.'
+          : response.status === 410
+          ? 'Model has been deprecated/removed from OpenRouter.'
+          : response.status === 429
+          ? 'Rate limit reached for this model.'
+          : response.status >= 500
+          ? 'Provider is temporarily unavailable.'
+          : `HTTP ${response.status}`);
+
+      const lower = message.toLowerCase();
+      const retryable =
+        response.status === 429 ||  // Rate limit - retry with backoff or next model
+        response.status >= 500 ||   // Server error - retry
+        lower.includes('overloaded') ||
+        lower.includes('unavailable') ||
+        lower.includes('rate');
+      
+      const skipToNextModel =
+        response.status === 404 ||  // Model not found
+        response.status === 410 ||  // Model deprecated
+        lower.includes('no endpoints');
+
+      return {
+        success: false,
+        error: `${model}: ${message}`,
+        retryable: retryable && !skipToNextModel
+      };
+    }
+
+    let data: any = null;
+    try {
+      data = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      return {
+        success: false,
+        error: `${model}: Invalid JSON response from provider.`,
+        retryable: true
+      };
+    }
+
+    const content: string | undefined =
+      (data?.choices?.[0]?.message?.content as string | undefined) ||
+      (typeof data?.choices?.[0]?.message === 'string'
+        ? (data.choices[0].message as string)
+        : undefined);
+
+    if (!content || !content.trim()) {
+      return {
+        success: false,
+        error: `${model}: Empty response from provider.`,
+        retryable: true
+      };
+    }
+
+    // Clean up the content before returning
+    const cleanedContent = extractJSON(content) || content;
+
+    return {
+      success: true,
+      content: cleanedContent,
+      retryable: false
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: `${model}: ${err instanceof Error ? err.message : 'Network error'}`,
+      retryable: true
+    };
+  }
+};
+
 export const callOpenRouterWithFallback = async (
   params: OpenRouterChatParams,
 ): Promise<string> => {
   const apiKey = await getOpenRouterApiKey();
-  const temperature = params.temperature ?? 0.4;
-  const maxTokens = params.maxTokens ?? 1200;
-
-  let lastError: unknown = null;
+  
+  let lastError: string = 'All AI providers failed.';
 
   for (const model of OPENROUTER_MODELS) {
-    try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Nexus Learn',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: params.systemMessage },
-            { role: 'user', content: params.userMessage },
-          ],
-          temperature,
-          max_tokens: maxTokens,
-        }),
-      });
-
-      const rawText = await response.text();
-
-      if (!response.ok) {
-        let payload: any = null;
-        try {
-          payload = rawText ? JSON.parse(rawText) : null;
-        } catch {
-          payload = null;
-        }
-
-        const message: string =
-          payload?.error?.message ||
-          (response.status === 401
-            ? 'Invalid or missing OpenRouter API key.'
-            : response.status === 403
-            ? 'Access to this model is forbidden. Check your OpenRouter account.'
-            : response.status === 404
-            ? 'Model not found on OpenRouter.'
-            : response.status === 410
-            ? 'Model has been deprecated/removed from OpenRouter.'
-            : response.status === 429
-            ? 'Rate limit reached for this model.'
-            : response.status >= 500
-            ? 'Provider is temporarily unavailable.'
-            : `HTTP ${response.status}`);
-
-        // If this looks like a provider / routing issue, try next model
-        const lower = message.toLowerCase();
-        const retryable =
-          response.status === 404 ||  // Model not found - try next
-          response.status === 410 ||  // Model deprecated - try next
-          response.status === 429 ||
-          response.status >= 500 ||
-          lower.includes('no endpoints') ||
-          lower.includes('overloaded') ||
-          lower.includes('unavailable');
-
-        lastError = new Error(`${model}: ${message}`);
-        console.warn(`OpenRouter model ${model} failed:`, message);
-
-        if (retryable) {
-          continue;
-        }
-
-        // Non-retryable – fail fast
-        throw lastError;
+    console.log(`[OpenRouter] Trying model: ${model}`);
+    
+    // Retry loop for each model with exponential backoff
+    for (let attempt = 0; attempt < MAX_RETRIES_PER_MODEL; attempt++) {
+      if (attempt > 0) {
+        const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+        console.log(`[OpenRouter] Retry ${attempt} for ${model}, waiting ${backoffMs}ms`);
+        await sleep(backoffMs);
       }
 
-      let data: any = null;
-      try {
-        data = rawText ? JSON.parse(rawText) : null;
-      } catch (e) {
-        lastError = e;
-        continue;
+      const result = await callModel(model, params, apiKey);
+
+      if (result.success && result.content) {
+        console.log(`[OpenRouter] Success with model: ${model}`);
+        return result.content;
       }
 
-      const content: string | undefined =
-        (data?.choices?.[0]?.message?.content as string | undefined) ||
-        (typeof data?.choices?.[0]?.message === 'string'
-          ? (data.choices[0].message as string)
-          : undefined);
+      lastError = result.error || 'Unknown error';
+      console.warn(`[OpenRouter] ${result.error}`);
 
-      if (!content || !content.trim()) {
-        lastError = new Error(`${model}: Empty response from provider.`);
-        continue;
+      // If not retryable (e.g., 404, 410, auth error), skip to next model
+      if (!result.retryable) {
+        break;
       }
-
-      return content;
-    } catch (err) {
-      lastError = err;
-      // Try next model
     }
   }
 
-  const finalMessage =
-    lastError instanceof Error && lastError.message
-      ? lastError.message
-      : 'All AI providers failed. Please try again later.';
-
-  throw new Error(finalMessage);
+  throw new Error(lastError);
 };
