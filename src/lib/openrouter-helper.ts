@@ -1,15 +1,16 @@
 import { database } from '@/lib/firebase';
 import { get, ref } from 'firebase/database';
 
-// Updated model list - removed deprecated Mistral models
-// Primary: qwen/qwen3-next-80b-a3b-instruct:free (most capable free model)
-// Fallback chain: verified available models on OpenRouter as of 2026-02
+// Updated model list - verified available free models on OpenRouter as of 2026-02
+// Source: https://openrouter.ai/models (free tier models)
+// Primary: meta-llama/llama-3.3-70b-instruct:free (GPT-4 level, most reliable)
+// Fallback chain: verified working models
 export const OPENROUTER_MODELS: string[] = [
-  'qwen/qwen3-next-80b-a3b-instruct:free',  // Primary - best free model
-  'qwen/qwen3-4b:free',                      // Fallback 1 - smaller Qwen
-  'deepseek/deepseek-r1-0528:free',          // Fallback 2 - DeepSeek reasoning
-  'google/gemma-3-27b-it:free',              // Fallback 3 - Google Gemma
-  'meta-llama/llama-4-scout:free',           // Fallback 4 - Meta Llama 4
+  'meta-llama/llama-3.3-70b-instruct:free',    // Primary - GPT-4 level, 131K context
+  'google/gemini-2.0-flash-exp:free',          // Fallback 1 - 1M context, fast
+  'google/gemma-3-27b-it:free',                // Fallback 2 - Multimodal
+  'deepseek/deepseek-r1-0528:free',            // Fallback 3 - Strong reasoning
+  'mistralai/mistral-small-3.1-24b-instruct:free', // Fallback 4 - Fast general
 ];
 
 export interface OpenRouterChatParams {
