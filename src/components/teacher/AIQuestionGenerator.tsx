@@ -10,6 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
 import { callOpenRouterWithFallback } from '@/lib/openrouter-helper';
+import { parseJsonArrayFromAi } from '@/lib/ai/json';
 
 interface Question {
   id: string;
@@ -330,67 +331,9 @@ export const AIQuestionGenerator = ({
     return undefined;
   };
 
-  const parseQuestionsFromModel = (rawContent: string): any[] => {
-    let cleanContent = rawContent.trim();
-
-    // Remove DeepSeek reasoning blocks if they appear
-    cleanContent = cleanContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-
-    // Remove markdown code blocks
-    cleanContent = cleanContent.replace(/^```(?:json)?\s*/i, '');
-    cleanContent = cleanContent.replace(/\s*```$/i, '');
-    cleanContent = cleanContent.trim();
-
-    // Try to find the JSON array in the response (in case extra text slips in)
-    // 1) Direct top-level array
-    let jsonArrayMatch = cleanContent.match(/\[[\s\S]*\]/);
-
-    // 2) Or nested under a "questions" property
-    if (!jsonArrayMatch) {
-      const questionsMatch = cleanContent.match(/"questions"\s*:\s*(\[[\s\S]*\])/i);
-      if (questionsMatch) {
-        jsonArrayMatch = [questionsMatch[1]] as unknown as RegExpMatchArray;
-      }
-    }
-
-    if (jsonArrayMatch) {
-      cleanContent = jsonArrayMatch[0];
-    }
-
-    const sanitize = (s: string) => {
-      let result = s
-        // Normalize various quote styles
-        .replace(/[""]/g, '"')
-        .replace(/['']/g, "'")
-        // Remove obvious trailing commas
-        .replace(/,\s*]/g, ']')
-        .replace(/,\s*}/g, '}')
-        // Normalize whitespace
-        .replace(/\r/g, '')
-        .replace(/\t/g, ' ')
-        .replace(/\u00A0/g, ' ')
-        .replace(/\n/g, ' ');
-
-      // Collapse excessive spaces that models sometimes introduce in JSON
-      result = result.replace(/\s{2,}/g, ' ');
-      return result.trim();
-    };
-
-    const tryParse = (s: string) => {
-      const parsed = JSON.parse(sanitize(s));
-      if (!Array.isArray(parsed)) throw new Error('Response is not an array');
-      return parsed;
-    };
-
-    try {
-      return tryParse(cleanContent);
-    } catch {
-      // Fallback: tolerate single-quoted KEYS/VALUES (but avoid wrecking apostrophes inside words)
-      const relaxed = cleanContent
-        .replace(/([{,]\s*)'([^']+?)'\s*:/g, '$1"$2":')
-        .replace(/:\s*'([^']*?)'(\s*[},])/g, ': "$1"$2');
-      return tryParse(relaxed);
-    }
+  const parseQuestionsFromModel = (rawContent: string): { parsed: any[]; truncated: boolean } => {
+    const { items, truncated } = parseJsonArrayFromAi(rawContent);
+    return { parsed: items as any[], truncated };
   };
 
   const generateQuestions = async () => {
@@ -482,17 +425,25 @@ For Long Answer:
 
 OUTPUT ONLY THE JSON ARRAY:`;
 
-      const systemMessage = 'You are a JSON generator. You must return ONLY a valid JSON array of questions. Do not include markdown, commentary, or any extra keys.';
+      const systemMessage =
+        'You are a JSON generator. Return ONLY a valid JSON array (no markdown, no commentary). Ensure the JSON is complete and ends with a closing bracket ]. Do not include trailing commas.';
+
+      // Prevent truncation (a common reason for parse failures) by scaling maxTokens with question count.
+      // (OpenRouter supports larger outputs, but keep a reasonable cap.)
+      const maxTokens = Math.min(3500, Math.max(1400, totalQuestions * 220));
+
+      const callAiOnce = (temperature: number) =>
+        callOpenRouterWithFallback({
+          systemMessage,
+          userMessage: basePrompt,
+          temperature,
+          maxTokens,
+        });
 
       const content = await withProgress(
         (async () => {
           setStage('Contacting AI providers…', 38);
-          return callOpenRouterWithFallback({
-            systemMessage,
-            userMessage: basePrompt,
-            temperature: 0.4,
-            maxTokens: 1200,
-          });
+          return callAiOnce(0.4);
         })(),
         { start: 35, end: 78, message: 'Generating questions with AI…', minMs: 1600 },
       );
@@ -503,13 +454,38 @@ OUTPUT ONLY THE JSON ARRAY:`;
 
       let parsed: any[];
       try {
-        parsed = parseQuestionsFromModel(content);
+        const first = parseQuestionsFromModel(content);
+        if (first.truncated) {
+          throw new Error('AI output appears truncated');
+        }
+        parsed = first.parsed;
         if (!Array.isArray(parsed) || parsed.length === 0) {
           throw new Error('No valid questions were generated.');
         }
       } catch (parseError) {
-        console.error('Parse error:', parseError, 'Content:', content);
-        throw new Error('Failed to parse AI response. Please try again.');
+        // If the model output is malformed/truncated JSON, retry once (more deterministic) before failing.
+        console.warn('AI parse failed (attempt 1), retrying once…', parseError);
+        console.debug('Raw AI content (attempt 1, first 2000 chars):', content.slice(0, 2000));
+
+        setStage('AI returned malformed JSON — retrying…', 62);
+        const retryContent = await callAiOnce(0);
+
+        try {
+          const second = parseQuestionsFromModel(retryContent);
+          if (second.truncated) {
+            throw new Error('AI output appears truncated (retry)');
+          }
+          parsed = second.parsed;
+          if (!Array.isArray(parsed) || parsed.length === 0) {
+            throw new Error('No valid questions were generated.');
+          }
+        } catch (parseError2) {
+          console.error('Parse error (final):', parseError2);
+          console.debug('Raw AI content (final, first 2000 chars):', retryContent.slice(0, 2000));
+          throw new Error(
+            'Failed to parse the AI response (malformed or truncated JSON). Try reducing question counts or selecting fewer chapters, then try again.'
+          );
+        }
       }
 
       // Validate and normalize each question (be forgiving to reduce failures)
