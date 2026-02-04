@@ -115,13 +115,50 @@ export const parseJsonArrayFromAi = (raw: string): { items: unknown[]; truncated
   const extracted = extractLikelyJson(stripped);
   const base = repairJsonLikeString(extracted.json);
 
+  const coerceToArray = (parsed: unknown): unknown[] => {
+    // Sometimes a provider returns JSON *as a string* (double-encoded)
+    if (typeof parsed === 'string') {
+      try {
+        return coerceToArray(JSON.parse(parsed));
+      } catch {
+        // fall through
+      }
+    }
+
+    if (Array.isArray(parsed)) return parsed;
+
+    if (parsed && typeof parsed === 'object') {
+      const obj: any = parsed;
+
+      // Common shapes various models return
+      const candidates = [
+        obj.questions,
+        obj.items,
+        obj.data,
+        obj.results,
+        obj.output?.questions,
+        obj.output?.items,
+      ];
+      for (const c of candidates) {
+        if (Array.isArray(c)) return c;
+      }
+
+      // Some models accidentally return a single question object
+      if (
+        typeof obj.type === 'string' ||
+        typeof obj.text === 'string' ||
+        typeof obj.question === 'string'
+      ) {
+        return [obj];
+      }
+    }
+
+    throw new Error('AI JSON was not an array');
+  };
+
   const tryParse = (s: string): unknown[] => {
     const parsed = JSON.parse(s);
-    if (Array.isArray(parsed)) return parsed;
-    if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).questions)) {
-      return (parsed as any).questions;
-    }
-    throw new Error('AI JSON was not an array');
+    return coerceToArray(parsed);
   };
 
   try {
