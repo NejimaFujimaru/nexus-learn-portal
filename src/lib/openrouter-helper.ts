@@ -19,11 +19,9 @@ export interface OpenRouterChatParams {
   userMessage: string;
   temperature?: number;
   maxTokens?: number;
+  /** Optional override to avoid an extra RTDB read when the caller already has the key */
+  apiKey?: string;
 }
-
-// Retry configuration - only retry on server errors, not rate limits
-const MAX_RETRIES_PER_MODEL = 1; // Reduced: skip faster to next model
-const INITIAL_BACKOFF_MS = 500;  // Reduced backoff
 
 export const getOpenRouterApiKey = async (): Promise<string> => {
   // Preferred new location (requires teacher role per RTDB rules)
@@ -49,15 +47,12 @@ export const getOpenRouterApiKey = async (): Promise<string> => {
   return key;
 };
 
-// Helper to sleep for exponential backoff
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 // Make a single API call to a specific model
 const callModel = async (
   model: string,
   params: OpenRouterChatParams,
   apiKey: string
-): Promise<{ success: boolean; content?: string; error?: string; retryable: boolean }> => {
+): Promise<{ success: boolean; content?: string; error?: string }> => {
   const temperature = params.temperature ?? 0.4;
   const maxTokens = params.maxTokens ?? 1200;
 
@@ -108,20 +103,9 @@ const callModel = async (
           ? 'Provider is temporarily unavailable.'
           : `HTTP ${response.status}`);
 
-      // Skip immediately to next model for rate limits/payment - no retries
-      const skipImmediately =
-        response.status === 429 ||  // Rate limit - skip to next model NOW
-        response.status === 402 ||  // Payment required - skip NOW
-        response.status === 404 ||  // Model not found
-        response.status === 410;    // Model deprecated
-
-      // Only retry on 5xx server errors
-      const retryable = response.status >= 500 && !skipImmediately;
-
       return {
         success: false,
         error: `${model}: ${message}`,
-        retryable
       };
     }
 
@@ -132,7 +116,6 @@ const callModel = async (
       return {
         success: false,
         error: `${model}: Invalid JSON response from provider.`,
-        retryable: true
       };
     }
 
@@ -146,7 +129,6 @@ const callModel = async (
       return {
         success: false,
         error: `${model}: Empty response from provider.`,
-        retryable: false  // Skip immediately to next model on empty response
       };
     }
 
@@ -157,13 +139,11 @@ const callModel = async (
     return {
       success: true,
       content: cleanedContent,
-      retryable: false
     };
   } catch (err) {
     return {
       success: false,
       error: `${model}: ${err instanceof Error ? err.message : 'Network error'}`,
-      retryable: true
     };
   }
 };
@@ -171,36 +151,22 @@ const callModel = async (
 export const callOpenRouterWithFallback = async (
   params: OpenRouterChatParams,
 ): Promise<string> => {
-  const apiKey = await getOpenRouterApiKey();
+  const apiKey = params.apiKey ?? (await getOpenRouterApiKey());
   
   let lastError: string = 'All AI providers failed.';
 
   for (const model of OPENROUTER_MODELS) {
     console.log(`[OpenRouter] Trying model: ${model}`);
-    
-    // Retry loop for each model with exponential backoff
-    for (let attempt = 0; attempt < MAX_RETRIES_PER_MODEL; attempt++) {
-      if (attempt > 0) {
-        const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
-        console.log(`[OpenRouter] Retry ${attempt} for ${model}, waiting ${backoffMs}ms`);
-        await sleep(backoffMs);
-      }
 
-      const result = await callModel(model, params, apiKey);
+    const result = await callModel(model, params, apiKey);
 
-      if (result.success && result.content) {
-        console.log(`[OpenRouter] Success with model: ${model}`);
-        return result.content;
-      }
-
-      lastError = result.error || 'Unknown error';
-      console.warn(`[OpenRouter] ${result.error}`);
-
-      // If not retryable (e.g., 404, 410, auth error), skip to next model
-      if (!result.retryable) {
-        break;
-      }
+    if (result.success && result.content) {
+      console.log(`[OpenRouter] Success with model: ${model}`);
+      return result.content;
     }
+
+    lastError = result.error || 'Unknown error';
+    console.warn(`[OpenRouter] ${result.error}`);
   }
 
   throw new Error(lastError);

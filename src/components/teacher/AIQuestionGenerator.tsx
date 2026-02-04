@@ -153,6 +153,7 @@ export const AIQuestionGenerator = ({
   const [loading, setLoading] = useState(false);
   const [configLoading, setConfigLoading] = useState(true);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  const [apiKey, setApiKey] = useState<string | null>(null);
   
   // View state: 'config' | 'generating' | 'complete'
   const [viewState, setViewState] = useState<'config' | 'generating' | 'complete'>('config');
@@ -205,9 +206,11 @@ export const AIQuestionGenerator = ({
         }
 
         setApiKeyConfigured(Boolean(key));
+        setApiKey(key || null);
       } catch (error) {
         console.error('Error checking API config:', error);
         setApiKeyConfigured(false);
+        setApiKey(null);
       } finally {
         setConfigLoading(false);
       }
@@ -251,35 +254,6 @@ export const AIQuestionGenerator = ({
     }
   };
 
-  // Progress animation like your sample: staged % increases + status messages
-  const simulateProgress = (start: number, end: number, durationMs: number, message: string) => {
-    return new Promise<void>((resolve) => {
-      clearProgressInterval();
-      setGenerationStage(message);
-
-      const tickMs = 50;
-      const steps = Math.max(1, Math.floor(durationMs / tickMs));
-      const increment = (end - start) / steps;
-      let current = start;
-
-      setGenerationProgress(Math.max(0, Math.min(100, Math.floor(current))));
-
-      progressIntervalRef.current = window.setInterval(() => {
-        current += increment;
-
-        if (current >= end) {
-          current = end;
-          clearProgressInterval();
-          setGenerationProgress(Math.max(0, Math.min(100, Math.floor(current))));
-          resolve();
-          return;
-        }
-
-        setGenerationProgress(Math.max(0, Math.min(100, Math.floor(current))));
-      }, tickMs);
-    });
-  };
-
   const withProgress = async <T,>(
     promise: Promise<T>,
     opts: { start: number; end: number; message: string; minMs?: number },
@@ -300,7 +274,7 @@ export const AIQuestionGenerator = ({
 
     try {
       const result = await promise;
-      const minMs = opts.minMs ?? 900;
+      const minMs = opts.minMs ?? 0;
       const elapsed = Date.now() - startedAt;
       if (elapsed < minMs) {
         await new Promise((r) => setTimeout(r, minMs - elapsed));
@@ -346,6 +320,15 @@ export const AIQuestionGenerator = ({
       return;
     }
 
+    if (!apiKey) {
+      toast({
+        title: 'Configuration Error',
+        description: 'OpenRouter API key is not accessible. Make sure you are logged in as a teacher (RTDB rules).',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (marksExceed) {
       toast({
         title: 'Marks Exceeded',
@@ -385,10 +368,7 @@ export const AIQuestionGenerator = ({
     setGenerationStage('');
 
     try {
-      await simulateProgress(0, 18, 450, 'Preparing chapter content...');
-
-      await simulateProgress(18, 28, 350, 'Reading AI configuration...');
-      await simulateProgress(28, 35, 350, 'Building prompt...');
+      setStage('Building prompt…', 15);
 
       const basePrompt = `You are an expert teacher creating questions for a test.
 
@@ -406,7 +386,10 @@ ${blankCount > 0 ? `- ${blankCount} Fill in the Blank questions, ${blankMarks} m
 ${shortCount > 0 ? `- ${shortCount} Short Answer questions, ${shortMarks} mark(s) each` : ''}
 ${longCount > 0 ? `- ${longCount} Long Answer questions, ${longMarks} mark(s) each` : ''}
 
-IMPORTANT: Respond ONLY with a valid JSON array. No markdown, no code blocks, no explanation, no chain-of-thought, no reasoning tags.
+IMPORTANT: Respond ONLY with valid JSON. No markdown, no code blocks, no explanation, no chain-of-thought, no reasoning tags.
+
+Return this exact JSON shape (object root):
+{"questions": [ ... ]}
 
 Each question must follow this exact format:
 
@@ -423,10 +406,10 @@ For Short Answer:
 For Long Answer:
 {"type": "long", "text": "Explain in detail...", "marks": ${longMarks}}
 
-OUTPUT ONLY THE JSON ARRAY:`;
+OUTPUT ONLY THE JSON OBJECT:`;
 
       const systemMessage =
-        'You are a JSON generator. Return ONLY a valid JSON array (no markdown, no commentary). Ensure the JSON is complete and ends with a closing bracket ]. Do not include trailing commas.';
+        'You are a JSON generator. Return ONLY valid JSON (no markdown, no commentary). The root MUST be an object with a "questions" array. Ensure the JSON is complete and valid. Do not include trailing commas.';
 
       // Prevent truncation (a common reason for parse failures) by scaling maxTokens with question count.
       // (OpenRouter supports larger outputs, but keep a reasonable cap.)
@@ -438,54 +421,31 @@ OUTPUT ONLY THE JSON ARRAY:`;
           userMessage: basePrompt,
           temperature,
           maxTokens,
+          apiKey,
         });
 
-      const content = await withProgress(
-        (async () => {
-          setStage('Contacting AI providers…', 38);
-          return callAiOnce(0.4);
-        })(),
-        { start: 35, end: 78, message: 'Generating questions with AI…', minMs: 1600 },
-      );
+      setStage('Contacting AI providers…', 25);
+      const content = await withProgress(callAiOnce(0.3), {
+        start: 25,
+        end: 78,
+        message: 'Generating questions with AI…',
+        minMs: 0,
+      });
 
       if (!content || !content.trim()) {
         throw new Error('No response from AI. Please try again.');
       }
 
+      setStage('Parsing AI response…', 80);
+
       let parsed: any[];
-      try {
-        const first = parseQuestionsFromModel(content);
-        if (first.truncated) {
-          throw new Error('AI output appears truncated');
-        }
-        parsed = first.parsed;
-        if (!Array.isArray(parsed) || parsed.length === 0) {
-          throw new Error('No valid questions were generated.');
-        }
-      } catch (parseError) {
-        // If the model output is malformed/truncated JSON, retry once (more deterministic) before failing.
-        console.warn('AI parse failed (attempt 1), retrying once…', parseError);
-        console.debug('Raw AI content (attempt 1, first 2000 chars):', content.slice(0, 2000));
-
-        setStage('AI returned malformed JSON — retrying…', 62);
-        const retryContent = await callAiOnce(0);
-
-        try {
-          const second = parseQuestionsFromModel(retryContent);
-          if (second.truncated) {
-            throw new Error('AI output appears truncated (retry)');
-          }
-          parsed = second.parsed;
-          if (!Array.isArray(parsed) || parsed.length === 0) {
-            throw new Error('No valid questions were generated.');
-          }
-        } catch (parseError2) {
-          console.error('Parse error (final):', parseError2);
-          console.debug('Raw AI content (final, first 2000 chars):', retryContent.slice(0, 2000));
-          throw new Error(
-            'Failed to parse the AI response (malformed or truncated JSON). Try reducing question counts or selecting fewer chapters, then try again.'
-          );
-        }
+      const first = parseQuestionsFromModel(content);
+      if (first.truncated) {
+        throw new Error('AI response was truncated. Reduce question counts or chapter selection and try again.');
+      }
+      parsed = first.parsed;
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        throw new Error('No valid questions were generated. Please try again.');
       }
 
       // Validate and normalize each question (be forgiving to reduce failures)
@@ -552,7 +512,8 @@ OUTPUT ONLY THE JSON ARRAY:`;
         throw new Error('No valid questions were generated. Please try again.');
       }
 
-      await simulateProgress(85, 100, 350, 'Finalizing questions...');
+      setStage('Finalizing questions…', 92);
+      setGenerationProgress(100);
 
       // Store results and show completion
       const totalGeneratedMarks = generatedQuestions.reduce((sum, q) => sum + q.marks, 0);
