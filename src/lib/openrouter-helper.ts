@@ -1,16 +1,17 @@
 import { database } from '@/lib/firebase';
 import { get, ref } from 'firebase/database';
+import { stripAiWrappers } from '@/lib/ai/json';
 
 // Updated model list - verified available free models on OpenRouter as of 2026-02
 // Source: https://openrouter.ai/models (free tier models)
-// Primary: meta-llama/llama-3.3-70b-instruct:free (GPT-4 level, most reliable)
-// Fallback chain: verified working models
+// Primary: qwen/qwen3-next-80b-a3b-instruct:free
+// Fallback chain: user-specified order
 export const OPENROUTER_MODELS: string[] = [
-  'meta-llama/llama-3.3-70b-instruct:free',    // Primary - GPT-4 level, 131K context
-  'google/gemini-2.0-flash-exp:free',          // Fallback 1 - 1M context, fast
-  'google/gemma-3-27b-it:free',                // Fallback 2 - Multimodal
-  'deepseek/deepseek-r1-0528:free',            // Fallback 3 - Strong reasoning
-  'mistralai/mistral-small-3.1-24b-instruct:free', // Fallback 4 - Fast general
+  'qwen/qwen3-next-80b-a3b-instruct:free',
+  'stepfun/step-3.5-flash:free',
+  'z-ai/glm-4.5-air:free',
+  'google/gemma-3-27b-it:free',
+  'nvidia/nemotron-3-nano-30b-a3b:free',
 ];
 
 export interface OpenRouterChatParams {
@@ -51,41 +52,6 @@ export const getOpenRouterApiKey = async (): Promise<string> => {
 // Helper to sleep for exponential backoff
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Strip markdown code blocks from response
-const stripMarkdownCodeBlocks = (content: string): string => {
-  let cleaned = content.trim();
-  
-  // Remove ```json ... ``` or ``` ... ``` blocks
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '');
-  cleaned = cleaned.replace(/\s*```$/i, '');
-  
-  // Also handle case where content might have multiple code blocks
-  cleaned = cleaned.replace(/```(?:json)?\s*([\s\S]*?)\s*```/gi, '$1');
-  
-  return cleaned.trim();
-};
-
-// Extract JSON from potentially messy AI response
-const extractJSON = (content: string): string => {
-  let cleaned = stripMarkdownCodeBlocks(content);
-  
-  // Remove DeepSeek reasoning blocks
-  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-  
-  // Try to find JSON array or object
-  const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
-  const objectMatch = cleaned.match(/\{[\s\S]*\}/);
-  
-  if (arrayMatch) {
-    return arrayMatch[0];
-  }
-  if (objectMatch) {
-    return objectMatch[0];
-  }
-  
-  return cleaned;
-};
-
 // Make a single API call to a specific model
 const callModel = async (
   model: string,
@@ -101,6 +67,7 @@ const callModel = async (
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'HTTP-Referer': window.location.origin,
         'X-Title': 'Nexus Learn',
       },
@@ -186,8 +153,9 @@ const callModel = async (
       };
     }
 
-    // Clean up the content before returning
-    const cleanedContent = extractJSON(content) || content;
+    // Clean up common wrappers (code fences, <think> blocks). Let callers do the
+    // actual JSON extraction/parsing with the robust helpers in src/lib/ai/json.ts.
+    const cleanedContent = stripAiWrappers(content);
 
     return {
       success: true,
