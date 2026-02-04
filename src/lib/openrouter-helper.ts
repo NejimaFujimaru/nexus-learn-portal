@@ -21,12 +21,12 @@ export interface OpenRouterChatParams {
   maxTokens?: number;
 }
 
-// Retry configuration
-const MAX_RETRIES_PER_MODEL = 2;
-const INITIAL_BACKOFF_MS = 1000;
+// Retry configuration - only retry on server errors, not rate limits
+const MAX_RETRIES_PER_MODEL = 1; // Reduced: skip faster to next model
+const INITIAL_BACKOFF_MS = 500;  // Reduced backoff
 
 export const getOpenRouterApiKey = async (): Promise<string> => {
-  // Preferred new location
+  // Preferred new location (requires teacher role per RTDB rules)
   const primaryRef = ref(database, 'config/openrouter/apiKey');
   const primarySnap = await get(primaryRef);
   let raw: unknown = primarySnap.exists() ? primarySnap.val() : '';
@@ -108,23 +108,20 @@ const callModel = async (
           ? 'Provider is temporarily unavailable.'
           : `HTTP ${response.status}`);
 
-      const lower = message.toLowerCase();
-      const retryable =
-        response.status === 429 ||  // Rate limit - retry with backoff or next model
-        response.status >= 500 ||   // Server error - retry
-        lower.includes('overloaded') ||
-        lower.includes('unavailable') ||
-        lower.includes('rate');
-      
-      const skipToNextModel =
+      // Skip immediately to next model for rate limits/payment - no retries
+      const skipImmediately =
+        response.status === 429 ||  // Rate limit - skip to next model NOW
+        response.status === 402 ||  // Payment required - skip NOW
         response.status === 404 ||  // Model not found
-        response.status === 410 ||  // Model deprecated
-        lower.includes('no endpoints');
+        response.status === 410;    // Model deprecated
+
+      // Only retry on 5xx server errors
+      const retryable = response.status >= 500 && !skipImmediately;
 
       return {
         success: false,
         error: `${model}: ${message}`,
-        retryable: retryable && !skipToNextModel
+        retryable
       };
     }
 
@@ -149,7 +146,7 @@ const callModel = async (
       return {
         success: false,
         error: `${model}: Empty response from provider.`,
-        retryable: true
+        retryable: false  // Skip immediately to next model on empty response
       };
     }
 
