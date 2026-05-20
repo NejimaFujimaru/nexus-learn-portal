@@ -10,7 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
 import { callOpenRouterWithFallback } from '@/lib/openrouter-helper';
-import { parseJsonArrayFromAi } from '@/lib/ai/json';
+import { parseAiQuestionList } from '@/lib/ai/question-json';
 
 interface Question {
   id: string;
@@ -306,7 +306,7 @@ export const AIQuestionGenerator = ({
   };
 
   const parseQuestionsFromModel = (rawContent: string): { parsed: any[]; truncated: boolean } => {
-    const { items, truncated } = parseJsonArrayFromAi(rawContent);
+    const { items, truncated } = parseAiQuestionList(rawContent);
     return { parsed: items as any[], truncated };
   };
 
@@ -388,9 +388,10 @@ ${longCount > 0 ? `- ${longCount} Long Answer questions, ${longMarks} mark(s) ea
 
 IMPORTANT: Respond ONLY with valid JSON. No markdown, no code blocks, no explanation, no chain-of-thought, no reasoning tags.
 
-Return this exact JSON shape (object root):
-{"questions": [ ... ]}
+Return exactly one JSON object with this root shape:
+{"questions": []}
 
+Use ONLY these type values: "mcq", "blank", "short", "long".
 Each question must follow this exact format:
 
 For MCQ:
@@ -409,7 +410,7 @@ For Long Answer:
 OUTPUT ONLY THE JSON OBJECT:`;
 
       const systemMessage =
-        'You are a JSON generator. Return ONLY valid JSON (no markdown, no commentary). The root MUST be an object with a "questions" array. Ensure the JSON is complete and valid. Do not include trailing commas.';
+        'You create exam questions and return only strict JSON. The root must be an object with one key: questions. Never use markdown, prose, comments, trailing commas, or reasoning text.';
 
       // Prevent truncation (a common reason for parse failures) by scaling maxTokens with question count.
       // (OpenRouter supports larger outputs, but keep a reasonable cap.)
@@ -422,6 +423,15 @@ OUTPUT ONLY THE JSON OBJECT:`;
           temperature,
           maxTokens,
           apiKey,
+          validateContent: (candidate) => {
+            const result = parseQuestionsFromModel(candidate);
+            if (result.truncated) {
+              throw new Error('AI response was incomplete.');
+            }
+            if (!Array.isArray(result.parsed) || result.parsed.length === 0) {
+              throw new Error('AI response did not include questions.');
+            }
+          },
         });
 
       setStage('Contacting AI providers…', 25);
