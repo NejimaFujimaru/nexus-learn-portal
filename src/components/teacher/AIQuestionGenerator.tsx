@@ -368,9 +368,17 @@ export const AIQuestionGenerator = ({
     setGenerationStage('');
 
     try {
-      setStage('Building prompt…', 15);
+      setStage('Building prompt…', 10);
 
-      const basePrompt = `You are an expert teacher creating questions for a test.
+      const systemMessage =
+        'You create exam questions and return only strict JSON. The root must be an object with one key: questions (an array). Never use markdown, prose, comments, trailing commas, or reasoning text.';
+
+      const buildPrompt = (
+        typeLabel: string,
+        count: number,
+        marks: number,
+        shape: string,
+      ) => `You are an expert teacher creating questions for a test.
 
 SUBJECT: ${subjectName}
 CHAPTER(S): ${chapterTitles}
@@ -380,81 +388,89 @@ ${chapterContent}
 
 TASK: Generate questions ONLY from the above chapter content. Do not use external knowledge.
 
-Generate exactly:
-${mcqCount > 0 ? `- ${mcqCount} Multiple Choice Questions (MCQ) with 4 options each, ${mcqMarks} mark(s) each` : ''}
-${blankCount > 0 ? `- ${blankCount} Fill in the Blank questions, ${blankMarks} mark(s) each` : ''}
-${shortCount > 0 ? `- ${shortCount} Short Answer questions, ${shortMarks} mark(s) each` : ''}
-${longCount > 0 ? `- ${longCount} Long Answer questions, ${longMarks} mark(s) each` : ''}
+Generate exactly ${count} ${typeLabel} question(s), ${marks} mark(s) each.
 
-IMPORTANT: Respond ONLY with valid JSON. No markdown, no code blocks, no explanation, no chain-of-thought, no reasoning tags.
+Respond ONLY with a strict JSON object of this shape (no markdown, no prose):
+{"questions": [${shape}]}
 
-Return exactly one JSON object with this root shape:
-{"questions": []}
+OUTPUT ONLY THE JSON OBJECT.`;
 
-Use ONLY these type values: "mcq", "blank", "short", "long".
-Each question must follow this exact format:
-
-For MCQ:
-{"type": "mcq", "text": "Question text?", "options": ["Option A", "Option B", "Option C", "Option D"], "correctAnswer": "option0", "marks": ${mcqMarks}}
-Note: correctAnswer must be "option0", "option1", "option2", or "option3" (index of correct option).
-
-For Fill in the Blank:
-{"type": "blank", "text": "The _____ is the answer.", "correctAnswer": "missing word", "marks": ${blankMarks}}
-
-For Short Answer:
-{"type": "short", "text": "What is...?", "marks": ${shortMarks}}
-
-For Long Answer:
-{"type": "long", "text": "Explain in detail...", "marks": ${longMarks}}
-
-OUTPUT ONLY THE JSON OBJECT:`;
-
-      const systemMessage =
-        'You create exam questions and return only strict JSON. The root must be an object with one key: questions. Never use markdown, prose, comments, trailing commas, or reasoning text.';
-
-      // Prevent truncation (a common reason for parse failures) by scaling maxTokens with question count.
-      // (OpenRouter supports larger outputs, but keep a reasonable cap.)
-      const maxTokens = Math.min(3500, Math.max(1400, totalQuestions * 220));
-
-      const callAiOnce = (temperature: number) =>
-        callOpenRouterWithFallback({
-          systemMessage,
-          userMessage: basePrompt,
-          temperature,
-          maxTokens,
-          apiKey,
-          validateContent: (candidate) => {
-            const result = parseQuestionsFromModel(candidate);
-            if (result.truncated) {
-              throw new Error('AI response was incomplete.');
-            }
-            if (!Array.isArray(result.parsed) || result.parsed.length === 0) {
-              throw new Error('AI response did not include questions.');
-            }
-          },
+      const typeBatches: Array<{ label: string; count: number; marks: number; shape: string }> = [];
+      if (mcqCount > 0)
+        typeBatches.push({
+          label: 'Multiple Choice (MCQ, 4 options)',
+          count: mcqCount,
+          marks: mcqMarks,
+          shape: `{"type":"mcq","text":"...","options":["A","B","C","D"],"correctAnswer":"option0","marks":${mcqMarks}}`,
+        });
+      if (blankCount > 0)
+        typeBatches.push({
+          label: 'Fill in the Blank',
+          count: blankCount,
+          marks: blankMarks,
+          shape: `{"type":"blank","text":"The _____ is ...","correctAnswer":"...","marks":${blankMarks}}`,
+        });
+      if (shortCount > 0)
+        typeBatches.push({
+          label: 'Short Answer',
+          count: shortCount,
+          marks: shortMarks,
+          shape: `{"type":"short","text":"...","marks":${shortMarks}}`,
+        });
+      if (longCount > 0)
+        typeBatches.push({
+          label: 'Long Answer',
+          count: longCount,
+          marks: longMarks,
+          shape: `{"type":"long","text":"...","marks":${longMarks}}`,
         });
 
-      setStage('Contacting AI providers…', 25);
-      const content = await withProgress(callAiOnce(0.3), {
-        start: 25,
-        end: 78,
-        message: 'Generating questions with AI…',
-        minMs: 0,
-      });
+      setStage('Contacting AI providers…', 20);
 
-      if (!content || !content.trim()) {
-        throw new Error('No response from AI. Please try again.');
+      const parsed: any[] = [];
+      const totalBatches = typeBatches.length;
+      let batchIndex = 0;
+
+      for (const batch of typeBatches) {
+        batchIndex += 1;
+        const start = 20 + Math.round(((batchIndex - 1) / totalBatches) * 60);
+        const end = 20 + Math.round((batchIndex / totalBatches) * 60);
+        const maxTokens = Math.min(3500, Math.max(800, batch.count * 260));
+
+        const callBatch = () =>
+          callOpenRouterWithFallback({
+            systemMessage,
+            userMessage: buildPrompt(batch.label, batch.count, batch.marks, batch.shape),
+            temperature: 0.3,
+            maxTokens,
+            apiKey,
+            jsonMode: true,
+            validateContent: (candidate) => {
+              const result = parseAiQuestionList(candidate);
+              if (result.truncated) throw new Error('AI response was incomplete.');
+              if (!Array.isArray(result.items) || result.items.length === 0) {
+                throw new Error('AI response did not include questions.');
+              }
+            },
+          });
+
+        const content = await withProgress(callBatch(), {
+          start,
+          end,
+          message: `Generating ${batch.label} (${batchIndex}/${totalBatches})…`,
+          minMs: 0,
+        });
+
+        const batchResult = parseQuestionsFromModel(content);
+        if (batchResult.truncated || !Array.isArray(batchResult.parsed) || batchResult.parsed.length === 0) {
+          throw new Error(`No valid ${batch.label} questions were generated. Please try fewer questions.`);
+        }
+        parsed.push(...batchResult.parsed);
       }
 
-      setStage('Parsing AI response…', 80);
+      setStage('Parsing AI response…', 82);
 
-      let parsed: any[];
-      const first = parseQuestionsFromModel(content);
-      if (first.truncated) {
-        throw new Error('AI response was truncated. Reduce question counts or chapter selection and try again.');
-      }
-      parsed = first.parsed;
-      if (!Array.isArray(parsed) || parsed.length === 0) {
+      if (parsed.length === 0) {
         throw new Error('No valid questions were generated. Please try again.');
       }
 
