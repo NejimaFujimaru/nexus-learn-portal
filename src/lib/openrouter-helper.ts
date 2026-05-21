@@ -8,15 +8,15 @@ export interface OpenRouterModelConfig {
   endpoint: string;
 }
 
-// Requested OpenRouter fallback chain. All three use OpenRouter's Chat Completions
-// endpoint with the same required OpenRouter headers/auth; only the model id changes.
+// Fallback chain (exact order requested):
+// 1) Owl Alpha  2) DeepSeek V4 Flash (free)  3) Nvidia Nemotron Super (free)
 export const OPENROUTER_MODEL_CONFIGS: OpenRouterModelConfig[] = [
+  { id: 'openrouter/owl-alpha', endpoint: OPENROUTER_ENDPOINT },
   { id: 'deepseek/deepseek-v4-flash:free', endpoint: OPENROUTER_ENDPOINT },
   { id: 'nvidia/nemotron-3-super-120b-a12b:free', endpoint: OPENROUTER_ENDPOINT },
-  { id: 'openrouter/owl-alpha', endpoint: OPENROUTER_ENDPOINT },
 ];
 
-export const OPENROUTER_MODELS = OPENROUTER_MODEL_CONFIGS.map((model) => model.id);
+export const OPENROUTER_MODELS = OPENROUTER_MODEL_CONFIGS.map((m) => m.id);
 
 export interface OpenRouterChatParams {
   systemMessage: string;
@@ -24,34 +24,30 @@ export interface OpenRouterChatParams {
   temperature?: number;
   maxTokens?: number;
   apiKey?: string;
+  /** Request strict JSON output (response_format json_object). */
+  jsonMode?: boolean;
+  /** Per-model request timeout in ms (default 45s). */
+  timeoutMs?: number;
   /** Throw from here to reject a model response and continue to the next model. */
   validateContent?: (content: string, model: string) => void;
 }
 
 export const getOpenRouterApiKey = async (): Promise<string> => {
-  const locations = ['config/openrouter/apiKey', 'config/openrouterKey'];
-
-  for (const location of locations) {
-    const snapshot = await get(ref(database, location));
-    const key = snapshot.exists() && typeof snapshot.val() === 'string' ? snapshot.val().trim() : '';
+  for (const location of ['config/openrouter/apiKey', 'config/openrouterKey']) {
+    const snap = await get(ref(database, location));
+    const key = snap.exists() && typeof snap.val() === 'string' ? snap.val().trim() : '';
     if (key) return key;
   }
-
   throw new Error('OpenRouter API key is missing. Add it at config/openrouter/apiKey.');
 };
 
 const cleanAiText = (value: unknown): string => {
   if (Array.isArray(value)) {
     return value
-      .map((part) => {
-        if (typeof part === 'string') return part;
-        if (part && typeof part === 'object' && 'text' in part) return String((part as any).text ?? '');
-        return '';
-      })
+      .map((p) => (typeof p === 'string' ? p : p && typeof p === 'object' && 'text' in p ? String((p as any).text ?? '') : ''))
       .join('')
       .trim();
   }
-
   return String(value ?? '')
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/^```(?:json)?\s*/i, '')
@@ -60,7 +56,7 @@ const cleanAiText = (value: unknown): string => {
     .trim();
 };
 
-const openRouterHeaders = (apiKey: string): HeadersInit => ({
+const headers = (apiKey: string): HeadersInit => ({
   Authorization: `Bearer ${apiKey}`,
   'Content-Type': 'application/json',
   Accept: 'application/json',
@@ -68,7 +64,7 @@ const openRouterHeaders = (apiKey: string): HeadersInit => ({
   'X-Title': 'Nexus Learn',
 });
 
-const readOpenRouterError = (status: number, rawText: string) => {
+const httpErrorMessage = (status: number, rawText: string) => {
   let providerMessage = '';
   try {
     const payload = rawText ? JSON.parse(rawText) : null;
@@ -76,58 +72,100 @@ const readOpenRouterError = (status: number, rawText: string) => {
   } catch {
     providerMessage = rawText;
   }
-
   if (status === 401) return 'OpenRouter API key is invalid or missing.';
-  if (status === 402) return 'OpenRouter credits/payment are required for this model.';
+  if (status === 402) return 'OpenRouter credits required for this model.';
   if (status === 403) return 'This OpenRouter key cannot access this model.';
   if (status === 404) return 'This OpenRouter model was not found.';
   if (status === 408) return 'OpenRouter request timed out.';
   if (status === 410) return 'This OpenRouter model is no longer available.';
-  if (status === 429) return 'This model is rate-limited right now.';
-  if (status >= 500) return 'The model provider is temporarily unavailable.';
-
+  if (status === 429) return 'Model is rate-limited right now.';
+  if (status >= 500) return 'Model provider is temporarily unavailable.';
   return providerMessage ? providerMessage.slice(0, 220) : `OpenRouter returned HTTP ${status}.`;
 };
 
-const callSingleOpenRouterModel = async (
+const callSingle = async (
   model: OpenRouterModelConfig,
   params: OpenRouterChatParams,
   apiKey: string,
 ): Promise<string> => {
-  const response = await fetch(model.endpoint, {
-    method: 'POST',
-    headers: openRouterHeaders(apiKey),
-    body: JSON.stringify({
-      model: model.id,
-      messages: [
-        { role: 'system', content: params.systemMessage },
-        { role: 'user', content: params.userMessage },
-      ],
-      temperature: params.temperature ?? 0.2,
-      max_tokens: params.maxTokens ?? 1800,
-    }),
-  });
+  const timeoutMs = params.timeoutMs ?? 45000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const body: Record<string, unknown> = {
+    model: model.id,
+    messages: [
+      { role: 'system', content: params.systemMessage },
+      { role: 'user', content: params.userMessage },
+    ],
+    temperature: params.temperature ?? 0.2,
+    max_tokens: params.maxTokens ?? 1800,
+  };
+  if (params.jsonMode) {
+    body.response_format = { type: 'json_object' };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(model.endpoint, {
+      method: 'POST',
+      headers: headers(apiKey),
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    clearTimeout(timer);
+    if (err?.name === 'AbortError') throw new Error('Model timed out.');
+    throw new Error(`Network error reaching OpenRouter: ${err?.message || err}`);
+  }
+  clearTimeout(timer);
 
   const rawText = await response.text();
 
   if (!response.ok) {
-    throw new Error(readOpenRouterError(response.status, rawText));
+    throw new Error(httpErrorMessage(response.status, rawText));
   }
 
   let payload: any;
   try {
     payload = rawText ? JSON.parse(rawText) : null;
   } catch {
-    throw new Error('OpenRouter returned a non-JSON API response.');
+    throw new Error('OpenRouter returned a non-JSON response.');
   }
 
-  const message = payload?.choices?.[0]?.message;
-  const content = cleanAiText(message?.content ?? payload?.choices?.[0]?.text ?? '');
+  // Top-level error embedded in a 200 response
+  if (payload?.error?.message) {
+    throw new Error(`Provider error: ${String(payload.error.message).slice(0, 200)}`);
+  }
 
+  const choice = payload?.choices?.[0];
+  if (!choice) throw new Error('Provider returned no choices.');
+
+  // Per-choice error envelope
+  if (choice.error?.message) {
+    throw new Error(`Provider error: ${String(choice.error.message).slice(0, 200)}`);
+  }
+
+  const finishReason: string | undefined = choice.finish_reason ?? choice.native_finish_reason;
+  if (finishReason === 'error') {
+    throw new Error('Provider stopped with an error.');
+  }
+
+  const content = cleanAiText(choice.message?.content ?? choice.text ?? '');
   if (!content) {
-    throw new Error('The model returned an empty message.');
+    throw new Error(
+      finishReason === 'length'
+        ? 'Provider output was truncated (max_tokens reached).'
+        : 'Provider returned an empty message.',
+    );
   }
 
+  if (finishReason === 'length') {
+    // Surface truncation so the caller's validator can decide to skip
+    throw new Error('Provider output was truncated (max_tokens reached).');
+  }
+
+  console.log(`[OpenRouter] ${model.id} ok (finish=${finishReason ?? 'n/a'}, chars=${content.length})`);
   return content;
 };
 
@@ -138,20 +176,21 @@ export const callOpenRouterWithFallback = async (params: OpenRouterChatParams): 
   for (const model of OPENROUTER_MODEL_CONFIGS) {
     try {
       console.log(`[OpenRouter] Trying ${model.id}`);
-      const content = await callSingleOpenRouterModel(model, params, apiKey);
+      const content = await callSingle(model, params, apiKey);
       params.validateContent?.(content, model.id);
       console.log(`[OpenRouter] Success with ${model.id}`);
       return content;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown OpenRouter error.';
+      const message = error instanceof Error ? error.message : 'Unknown error.';
       errors.push(`${model.id}: ${message}`);
       console.warn(`[OpenRouter] ${model.id} failed: ${message}`);
-
-      if (/api key is invalid|api key is missing/i.test(message)) {
-        break;
-      }
+      if (/api key is invalid|api key is missing/i.test(message)) break;
     }
   }
 
-  throw new Error(`All requested OpenRouter models failed. ${errors[errors.length - 1] || ''}`.trim());
+  throw new Error(
+    `All AI providers failed or returned empty output. Try fewer questions or shorter chapter content. Last: ${
+      errors[errors.length - 1] || 'no detail'
+    }`,
+  );
 };
