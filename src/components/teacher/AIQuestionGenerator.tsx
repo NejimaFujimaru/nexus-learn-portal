@@ -184,6 +184,7 @@ export const AIQuestionGenerator = ({
       setGeneratedResults(null);
       setGenerationProgress(0);
       setGenerationStage('');
+      setErrorMessage(null);
     }
   }, [open]);
 
