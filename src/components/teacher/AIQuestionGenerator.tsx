@@ -155,9 +155,10 @@ export const AIQuestionGenerator = ({
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
   
-  // View state: 'config' | 'generating' | 'complete'
-  const [viewState, setViewState] = useState<'config' | 'generating' | 'complete'>('config');
+  // View state: 'config' | 'generating' | 'complete' | 'error'
+  const [viewState, setViewState] = useState<'config' | 'generating' | 'complete' | 'error'>('config');
   const [generatedResults, setGeneratedResults] = useState<{ count: number; marks: number } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // UI progress
   const [generationProgress, setGenerationProgress] = useState(0);
