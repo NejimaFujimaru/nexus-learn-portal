@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, Brain, PartyPopper } from 'lucide-react';
+import { Loader2, Sparkles, AlertCircle, CheckCircle2, AlertTriangle, Brain, PartyPopper, XCircle, RefreshCw, FileQuestion } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
@@ -155,9 +155,10 @@ export const AIQuestionGenerator = ({
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
   
-  // View state: 'config' | 'generating' | 'complete'
-  const [viewState, setViewState] = useState<'config' | 'generating' | 'complete'>('config');
+  // View state: 'config' | 'generating' | 'complete' | 'error'
+  const [viewState, setViewState] = useState<'config' | 'generating' | 'complete' | 'error'>('config');
   const [generatedResults, setGeneratedResults] = useState<{ count: number; marks: number } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // UI progress
   const [generationProgress, setGenerationProgress] = useState(0);
@@ -183,6 +184,7 @@ export const AIQuestionGenerator = ({
       setGeneratedResults(null);
       setGenerationProgress(0);
       setGenerationStage('');
+      setErrorMessage(null);
     }
   }, [open]);
 
@@ -554,10 +556,12 @@ OUTPUT ONLY THE JSON OBJECT.`;
       
     } catch (error) {
       console.error('AI Generation Error:', error);
-      setViewState('config'); // Go back to config on error
+      const msg = error instanceof Error ? error.message : 'Failed to generate questions. Please try again.';
+      setErrorMessage(msg);
+      setViewState('error');
       toast({
         title: 'Generation Error',
-        description: error instanceof Error ? error.message : 'Failed to generate questions. Please try again.',
+        description: msg,
         variant: 'destructive',
       });
     } finally {
@@ -817,6 +821,18 @@ OUTPUT ONLY THE JSON OBJECT.`;
                 </Alert>
               )}
 
+
+              {/* Empty state: no question types configured */}
+              {totalQuestions === 0 && selectedChapters.length > 0 && (
+                <div className="flex flex-col items-center justify-center gap-2 p-4 border border-dashed rounded-lg text-center">
+                  <FileQuestion className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm font-medium text-foreground">No questions configured</p>
+                  <p className="text-xs text-muted-foreground">
+                    Set a count above 0 for at least one question type to begin.
+                  </p>
+                </div>
+              )}
+
               {/* Generate Button */}
               <Button 
                 onClick={generateQuestions} 
@@ -873,6 +889,60 @@ OUTPUT ONLY THE JSON OBJECT.`;
               questionCount={generatedResults.count} 
               totalMarks={generatedResults.marks} 
             />
+          )}
+        </div>
+
+        {/* Error View */}
+        <div
+          className={`transition-all duration-300 ease-out ${
+            viewState === 'error'
+              ? 'opacity-100 scale-100'
+              : 'opacity-0 scale-95 absolute pointer-events-none'
+          }`}
+        >
+          {viewState === 'error' && (
+            <div className="w-full py-6 flex flex-col items-center justify-center space-y-4 animate-scale-in">
+              <div className="relative">
+                <div
+                  className="absolute inset-0 bg-destructive/20 rounded-full blur-2xl animate-pulse"
+                  style={{ width: 120, height: 120, margin: -24 }}
+                />
+                <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center border-2 border-destructive">
+                  <XCircle className="w-10 h-10 text-destructive" />
+                </div>
+              </div>
+              <div className="text-center space-y-2 max-w-sm">
+                <h3 className="text-xl font-bold text-foreground">Generation Failed</h3>
+                <p className="text-sm text-muted-foreground break-words">
+                  {errorMessage || 'Something went wrong while generating questions.'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Try reducing the number of questions, shortening chapter content, or retry in a moment.
+                </p>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setErrorMessage(null);
+                    setViewState('config');
+                  }}
+                >
+                  Back
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setErrorMessage(null);
+                    generateQuestions();
+                  }}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Retry
+                </Button>
+              </div>
+            </div>
           )}
         </div>
       </DialogContent>
