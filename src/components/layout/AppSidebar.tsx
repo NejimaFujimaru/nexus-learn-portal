@@ -20,6 +20,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface AppSidebarProps {
   userType: 'student' | 'teacher';
