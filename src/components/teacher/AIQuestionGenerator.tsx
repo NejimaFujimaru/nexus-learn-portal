@@ -821,6 +821,18 @@ OUTPUT ONLY THE JSON OBJECT.`;
                 </Alert>
               )}
 
+
+              {/* Empty state: no question types configured */}
+              {totalQuestions === 0 && selectedChapters.length > 0 && (
+                <div className="flex flex-col items-center justify-center gap-2 p-4 border border-dashed rounded-lg text-center">
+                  <FileQuestion className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm font-medium text-foreground">No questions configured</p>
+                  <p className="text-xs text-muted-foreground">
+                    Set a count above 0 for at least one question type to begin.
+                  </p>
+                </div>
+              )}
+
               {/* Generate Button */}
               <Button 
                 onClick={generateQuestions} 
