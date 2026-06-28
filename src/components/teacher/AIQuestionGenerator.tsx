@@ -879,6 +879,60 @@ OUTPUT ONLY THE JSON OBJECT.`;
             />
           )}
         </div>
+
+        {/* Error View */}
+        <div
+          className={`transition-all duration-300 ease-out ${
+            viewState === 'error'
+              ? 'opacity-100 scale-100'
+              : 'opacity-0 scale-95 absolute pointer-events-none'
+          }`}
+        >
+          {viewState === 'error' && (
+            <div className="w-full py-6 flex flex-col items-center justify-center space-y-4 animate-scale-in">
+              <div className="relative">
+                <div
+                  className="absolute inset-0 bg-destructive/20 rounded-full blur-2xl animate-pulse"
+                  style={{ width: 120, height: 120, margin: -24 }}
+                />
+                <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center border-2 border-destructive">
+                  <XCircle className="w-10 h-10 text-destructive" />
+                </div>
+              </div>
+              <div className="text-center space-y-2 max-w-sm">
+                <h3 className="text-xl font-bold text-foreground">Generation Failed</h3>
+                <p className="text-sm text-muted-foreground break-words">
+                  {errorMessage || 'Something went wrong while generating questions.'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Try reducing the number of questions, shortening chapter content, or retry in a moment.
+                </p>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setErrorMessage(null);
+                    setViewState('config');
+                  }}
+                >
+                  Back
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setErrorMessage(null);
+                    generateQuestions();
+                  }}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Retry
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
