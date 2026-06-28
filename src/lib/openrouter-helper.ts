@@ -1,8 +1,9 @@
 import { database } from '@/lib/firebase';
 import { get, ref } from 'firebase/database';
 
+// Single model: OpenRouter's free auto-router picks the best available free model.
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL_ID = 'openrouter/free';
+const MODEL_ID = 'openrouter/auto';
 
 export const OPENROUTER_MODELS = [MODEL_ID];
 
@@ -14,50 +15,43 @@ export interface OpenRouterChatParams {
   apiKey?: string;
   jsonMode?: boolean;
   timeoutMs?: number;
-  validateContent?: (content: string, model: string) => void;
 }
 
 export const getOpenRouterApiKey = async (): Promise<string> => {
-  for (const location of ['config/openrouter/apiKey', 'config/openrouterKey']) {
-    const snap = await get(ref(database, location));
-    const key = snap.exists() && typeof snap.val() === 'string' ? snap.val().trim() : '';
-    if (key) return key;
+  for (const path of ['config/openrouter/apiKey', 'config/openrouterKey']) {
+    const snap = await get(ref(database, path));
+    const v = snap.exists() && typeof snap.val() === 'string' ? snap.val().trim() : '';
+    if (v) return v;
   }
-  throw new Error('OpenRouter API key is missing. Add it at config/openrouter/apiKey.');
+  throw new Error('OpenRouter API key missing. Set it at config/openrouter/apiKey.');
 };
 
-const cleanAiText = (value: unknown): string => {
-  if (Array.isArray(value)) {
-    return value
-      .map((p) => (typeof p === 'string' ? p : p && typeof p === 'object' && 'text' in p ? String((p as any).text ?? '') : ''))
+const extractContent = (choice: any): string => {
+  const c = choice?.message?.content ?? choice?.text ?? '';
+  if (Array.isArray(c)) {
+    return c
+      .map((p) => (typeof p === 'string' ? p : p?.text ?? ''))
       .join('')
       .trim();
   }
-  return String(value ?? '')
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .replace(/```(?:json)?\s*([\s\S]*?)\s*```/gi, '$1')
-    .trim();
+  return String(c ?? '').trim();
 };
 
 export const callOpenRouterWithFallback = async (params: OpenRouterChatParams): Promise<string> => {
   const apiKey = params.apiKey ?? (await getOpenRouterApiKey());
   const timeoutMs = params.timeoutMs ?? 60000;
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   const body: Record<string, unknown> = {
     model: MODEL_ID,
-    models: [MODEL_ID],
-    route: 'fallback',
-    provider: { sort: 'price', allow_fallbacks: true },
     messages: [
       { role: 'system', content: params.systemMessage },
       { role: 'user', content: params.userMessage },
     ],
     temperature: params.temperature ?? 0.2,
-    max_tokens: params.maxTokens ?? 1800,
+    max_tokens: params.maxTokens ?? 2000,
   };
   if (params.jsonMode) body.response_format = { type: 'json_object' };
 
@@ -81,23 +75,16 @@ export const callOpenRouterWithFallback = async (params: OpenRouterChatParams): 
   }
   clearTimeout(timer);
 
-  const rawText = await response.text();
+  const text = await response.text();
 
   if (!response.ok) {
     let msg = `OpenRouter HTTP ${response.status}`;
-    try {
-      const p = JSON.parse(rawText);
-      msg = p?.error?.message || msg;
-    } catch {}
+    try { msg = JSON.parse(text)?.error?.message || msg; } catch {}
     throw new Error(msg);
   }
 
   let payload: any;
-  try {
-    payload = JSON.parse(rawText);
-  } catch {
-    throw new Error('OpenRouter returned non-JSON response.');
-  }
+  try { payload = JSON.parse(text); } catch { throw new Error('OpenRouter returned non-JSON.'); }
 
   if (payload?.error?.message) throw new Error(`Provider error: ${payload.error.message}`);
 
@@ -105,18 +92,17 @@ export const callOpenRouterWithFallback = async (params: OpenRouterChatParams): 
   if (!choice) throw new Error('Provider returned no choices.');
   if (choice.error?.message) throw new Error(`Provider error: ${choice.error.message}`);
 
-  const finishReason = choice.finish_reason ?? choice.native_finish_reason;
-  const content = cleanAiText(choice.message?.content ?? choice.text ?? '');
+  const content = extractContent(choice);
+  const finish = choice.finish_reason ?? choice.native_finish_reason;
 
   if (!content) {
     throw new Error(
-      finishReason === 'length'
-        ? 'AI output was truncated. Try fewer questions or shorter content.'
-        : 'AI returned an empty response. Try again.',
+      finish === 'length'
+        ? 'AI output was cut off (token limit). Try fewer questions.'
+        : 'AI returned an empty response. Please try again.',
     );
   }
 
-  console.log(`[OpenRouter] ok via ${payload?.model || MODEL_ID} (finish=${finishReason}, chars=${content.length})`);
-  params.validateContent?.(content, payload?.model || MODEL_ID);
+  console.log(`[OpenRouter] ok via ${payload?.model || MODEL_ID} (finish=${finish}, chars=${content.length})`);
   return content;
 };
