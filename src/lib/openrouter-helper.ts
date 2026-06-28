@@ -2,7 +2,7 @@ import { database } from '@/lib/firebase';
 import { get, ref } from 'firebase/database';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL_ID = 'openrouter/auto';
+const MODEL_ID = 'openrouter/free';
 
 export const OPENROUTER_MODELS = [MODEL_ID];
 
