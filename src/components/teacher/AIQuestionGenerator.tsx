@@ -556,10 +556,12 @@ OUTPUT ONLY THE JSON OBJECT.`;
       
     } catch (error) {
       console.error('AI Generation Error:', error);
-      setViewState('config'); // Go back to config on error
+      const msg = error instanceof Error ? error.message : 'Failed to generate questions. Please try again.';
+      setErrorMessage(msg);
+      setViewState('error');
       toast({
         title: 'Generation Error',
-        description: error instanceof Error ? error.message : 'Failed to generate questions. Please try again.',
+        description: msg,
         variant: 'destructive',
       });
     } finally {
