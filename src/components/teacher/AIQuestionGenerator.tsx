@@ -445,13 +445,6 @@ OUTPUT ONLY THE JSON OBJECT.`;
             maxTokens,
             apiKey,
             jsonMode: true,
-            validateContent: (candidate) => {
-              const result = parseAiQuestionList(candidate);
-              if (result.truncated) throw new Error('AI response was incomplete.');
-              if (!Array.isArray(result.items) || result.items.length === 0) {
-                throw new Error('AI response did not include questions.');
-              }
-            },
           });
 
         const content = await withProgress(callBatch(), {
